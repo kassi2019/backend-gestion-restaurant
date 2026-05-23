@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ---- Restaurant ----
+model Restaurant {
+  id              Int               @id @default(autoincrement())
+  nom             String            @db.VarChar(255)
+  adresse         String            @db.Text
+  utilisateurs    Utilisateur[]
+  tables          TableRestaurant[]
+  categories      CategorieMenu[]
+  menus           Menu[]
+}
+
+// ---- Utilisateurs (employés + admin) ----
+model Utilisateur {
+  id              Int               @id @default(autoincrement())
+  nom             String            @db.VarChar(255)
+  telephone       String            @unique @db.VarChar(50)
+  mot_de_passe    String            @db.VarChar(255)
+  role            Role              @default(SERVEUR)
+  statut          StatutUtilisateur  @default(ACTIF)
+  photo           String?           @db.Text
+  restaurantId    Int               @map("restaurant_id")
+  restaurant      Restaurant        @relation(fields: [restaurantId], references: [id])
+  dateCreation    DateTime          @default(now()) @map("date_creation")
+
+  tables          TableRestaurant[]       @relation("ServeurTables")
+  commandes       Commande[]
+  paiementsCaissier Commande[]           @relation("CaissierPaiements")
+  notifications   Notification[]
+  plannings       Planning[]
+  serveurTables   ServeurTable[]          @relation("ServeurAssignations")
+  sessionsClients SessionClient[]
+  facturesCaissier Facture[]             @relation("CaissierFactures")
+
+  @@map("utilisateurs")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  SERVEUR
+  CUISINE
+  BAR
+  CAISSIER
+}
+
+enum StatutUtilisateur {
+  ACTIF
+  INACTIF
+  CONGE
+  SUSPENDU
+}
+
+// ---- Tables du restaurant ----
+model TableRestaurant {
+  id              Int               @id @default(autoincrement())
+  numero          String            @db.VarChar(50)
+  zone            String            @db.VarChar(100)
+  statut          StatutTable       @default(LIBRE)
+  serveurId       Int?              @map("serveur_id")
+  serveur         Utilisateur?      @relation("ServeurTables", fields: [serveurId], references: [id])
+  qrCode          String?           @map("qr_code") @db.Text
+  restaurantId    Int               @map("restaurant_id")
+  restaurant      Restaurant        @relation(fields: [restaurantId], references: [id])
+
+  sessions        SessionClient[]
+  commandes       Commande[]
+  serveurTables   ServeurTable[]    @relation("TableAssignations")
+
+  @@map("tables_restaurant")
+}
+
+enum StatutTable {
+  LIBRE
+  OCCUPEE
+  RESERVEE
+}
+
+// ---- Catégories du menu ----
+model CategorieMenu {
+  id              Int         @id @default(autoincrement())
+  nom             String      @db.VarChar(255)
+  ordreService    Int         @map("ordre_service")
+  destination     Destination @default(CUISINE)
+  restaurantId    Int         @map("restaurant_id")
+  restaurant      Restaurant  @relation(fields: [restaurantId], references: [id])
+
+  menus           Menu[]
+
+  @@map("categories_menu")
+}
+
+enum Destination {
+  BAR
+  CUISINE
+  DESSERT
+}
+
+// ---- Menus (plats/boissons) ----
+model Menu {
+  id                Int             @id @default(autoincrement())
+  nom               String          @db.VarChar(255)
+  prix              Decimal         @db.Decimal(10, 2)
+  image             String?         @db.Text
+  categorieId       Int             @map("categorie_id")
+  categorie         CategorieMenu   @relation(fields: [categorieId], references: [id])
+  tempsPreparation  Int             @default(15) @map("temps_preparation")
+  disponibilite     Boolean         @default(true)
+  restaurantId      Int             @map("restaurant_id")
+  restaurant        Restaurant      @relation(fields: [restaurantId], references: [id])
+
+  commandeDetails   CommandeDetail[]
+
+  @@map("menus")
+}
+
+// ---- Sessions clients (QR Code) ----
+model SessionClient {
+  id              Int               @id @default(autoincrement())
+  sessionKey      String            @unique @map("session_key") @db.VarChar(100)
+  tableId         Int               @map("table_id")
+  table           TableRestaurant   @relation(fields: [tableId], references: [id])
+  dateArrivee     DateTime          @default(now()) @map("date_arrivee")
+  statut          StatutSession     @default(ACTIVE)
+  utilisateurId   Int?              @map("utilisateur_id")
+  utilisateur     Utilisateur?      @relation(fields: [utilisateurId], references: [id])
+
+  commandes       Commande[]
+
+  @@map("sessions_clients")
+}
+
+enum StatutSession {
+  ACTIVE
+  TERMINEE
+}
+
+// ---- Commandes ----
+model Commande {
+  id              Int               @id @default(autoincrement())
+  tableId         Int               @map("table_id")
+  table           TableRestaurant   @relation(fields: [tableId], references: [id])
+  serveurId       Int?              @map("serveur_id")
+  serveur         Utilisateur?      @relation(fields: [serveurId], references: [id])
+  sessionId       Int               @map("session_id")
+  session         SessionClient     @relation(fields: [sessionId], references: [id])
+  statut          StatutCommande    @default(EN_ATTENTE)
+  montantTotal    Decimal           @default(0) @map("montant_total") @db.Decimal(10, 2)
+  dateCommande    DateTime          @default(now()) @map("date_commande")
+  modePaiement    ModePaiement?     @map("mode_paiement")
+  statutPaiement  StatutPaiement    @default(NON_PAYEE) @map("statut_paiement")
+  datePaiement    DateTime?         @map("date_paiement")
+  caissierId      Int?              @map("caissier_id")
+  caissier        Utilisateur?      @relation("CaissierPaiements", fields: [caissierId], references: [id])
+  clientRef       String?           @map("client_ref") @db.VarChar(20)
+
+  details         CommandeDetail[]
+  factures        Facture[]
+
+  @@map("commandes")
+}
+
+enum StatutCommande {
+  EN_ATTENTE
+  VALIDEE
+  EN_PREPARATION
+  PRETE
+  SERVIE
+  PAYEE
+  ANNULEE
+}
+
+enum ModePaiement {
+  ESPECES
+  MOBILE_MONEY
+  CARTE_BANCAIRE
+}
+
+enum StatutPaiement {
+  NON_PAYEE
+  PAYEE
+  REMBOURSEE
+}
+
+// ---- Factures ----
+model Facture {
+  id              Int             @id @default(autoincrement())
+  numero          String          @unique @db.VarChar(50)
+  commandeId      Int             @map("commande_id")
+  commande        Commande        @relation(fields: [commandeId], references: [id])
+  montantTotal    Decimal         @map("montant_total") @db.Decimal(10, 2)
+  modePaiement    ModePaiement    @map("mode_paiement")
+  dateFacture     DateTime        @default(now()) @map("date_facture")
+  caissierId      Int             @map("caissier_id")
+  caissier        Utilisateur     @relation("CaissierFactures", fields: [caissierId], references: [id])
+
+  @@map("factures")
+}
+
+// ---- Détails des commandes ----
+model CommandeDetail {
+  id                Int               @id @default(autoincrement())
+  commandeId        Int               @map("commande_id")
+  commande          Commande          @relation(fields: [commandeId], references: [id])
+  menuId            Int               @map("menu_id")
+  menu              Menu              @relation(fields: [menuId], references: [id])
+  quantite          Int               @default(1)
+  prix              Decimal           @db.Decimal(10, 2)
+  statutPreparation StatutPreparation @default(EN_PREPARATION) @map("statut_preparation")
+
+  @@map("commande_details")
+}
+
+enum StatutPreparation {
+  EN_PREPARATION
+  PRET
+}
+
+// ---- Notifications ----
+model Notification {
+  id                Int         @id @default(autoincrement())
+  utilisateurId     Int         @map("utilisateur_id")
+  utilisateur       Utilisateur @relation(fields: [utilisateurId], references: [id])
+  message           String      @db.Text
+  lu                Boolean     @default(false)
+  dateNotification  DateTime    @default(now()) @map("date_notification")
+
+  @@map("notifications")
+}
+
+// ---- Planning des serveurs ----
+model Planning {
+  id              Int               @id @default(autoincrement())
+  utilisateurId   Int               @map("utilisateur_id")
+  utilisateur     Utilisateur       @relation(fields: [utilisateurId], references: [id])
+  jour            DateTime          @db.Date
+  heureDebut      DateTime          @map("heure_debut") @db.Time
+  heureFin        DateTime          @map("heure_fin") @db.Time
+  statut          StatutPlanning    @default(ACTIF)
+
+  @@map("plannings")
+}
+
+enum StatutPlanning {
+  ACTIF
+  ABSENT
+  CONGE
+}
+
+// ---- Affectation serveur / tables ----
+model ServeurTable {
+  id                Int               @id @default(autoincrement())
+  utilisateurId     Int               @map("utilisateur_id")
+  utilisateur       Utilisateur       @relation("ServeurAssignations", fields: [utilisateurId], references: [id])
+  tableId           Int               @map("table_id")
+  table             TableRestaurant   @relation("TableAssignations", fields: [tableId], references: [id])
+  dateAffectation   DateTime          @default(now()) @map("date_affectation")
+  statut            StatutAffectation @default(ACTIF)
+
+  @@map("serveur_tables")
+}
+
+enum StatutAffectation {
+  ACTIF
+  INACTIF
+}
