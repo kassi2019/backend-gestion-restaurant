@@ -45,11 +45,20 @@ export class PaiementService {
       },
     });
 
-    // Libérer la table
-    await this.prisma.tableRestaurant.update({
-      where: { id: commande.tableId },
-      data: { statut: 'LIBRE' },
+    // Libérer la table seulement s'il n'y a plus de commandes non payées
+    const commandesActives = await this.prisma.commande.count({
+      where: {
+        tableId: commande.tableId,
+        statutPaiement: 'NON_PAYEE',
+        statut: { not: 'ANNULEE' },
+      },
     });
+    if (commandesActives === 0) {
+      await this.prisma.tableRestaurant.update({
+        where: { id: commande.tableId },
+        data: { statut: 'LIBRE' },
+      });
+    }
 
     // 🔔 Notifications
     if (commande.serveurId) {

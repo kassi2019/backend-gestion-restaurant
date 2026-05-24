@@ -61,6 +61,13 @@ export class CommandesController {
     return this.commandesService.findBySession(+sessionId);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR)
+  @Get('table/:tableId')
+  findByTable(@Param('tableId') tableId: string) {
+    return this.commandesService.findByTable(+tableId);
+  }
+
   @Get('client-session/:sessionKey')
   findBySessionKey(@Param('sessionKey') sessionKey: string) {
     return this.commandesService.findBySessionKey(sessionKey);

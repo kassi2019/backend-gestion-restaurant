@@ -83,11 +83,7 @@ export class CommandesService {
       },
     });
 
-    // Update table status to OCCUPEE
-    await this.prisma.tableRestaurant.update({
-      where: { id: data.tableId },
-      data: { statut: 'OCCUPEE' },
-    });
+    // La table sera passée à OCCUPEE lors de la validation par le serveur
 
     // 🔔 Notifications
     if (table.serveurId) {
@@ -119,6 +115,7 @@ export class CommandesService {
         details: { include: { menu: true } },
         table: true,
         serveur: { select: { id: true, nom: true } },
+        session: { select: { id: true, sessionKey: true, dateArrivee: true } },
       },
       orderBy: { dateCommande: 'desc' },
     });
@@ -127,6 +124,18 @@ export class CommandesService {
   async findByServeur(serveurId: number) {
     return this.prisma.commande.findMany({
       where: { serveurId },
+      include: {
+        details: { include: { menu: true } },
+        table: true,
+        session: { select: { id: true, sessionKey: true, dateArrivee: true } },
+      },
+      orderBy: { dateCommande: 'desc' },
+    });
+  }
+
+  async findByTable(tableId: number) {
+    return this.prisma.commande.findMany({
+      where: { tableId },
       include: {
         details: { include: { menu: true } },
         table: true,
@@ -183,6 +192,14 @@ export class CommandesService {
       where: { id: commandeId },
       data: { statut },
     });
+
+    // Table → OCCUPEE quand le serveur valide la commande
+    if (statut === 'VALIDEE' && commande?.tableId) {
+      await this.prisma.tableRestaurant.update({
+        where: { id: commande.tableId },
+        data: { statut: 'OCCUPEE' },
+      });
+    }
 
     // 🔔 Notification au serveur
     if (commande?.serveurId) {
