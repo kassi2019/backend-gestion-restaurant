@@ -58,6 +58,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .orders-link { display: none; background: white; border: 2px solid #E86B2A; color: #E86B2A; padding: 14px; border-radius: 25px; font-size: 14px; font-weight: 700; cursor: pointer; }
 .orders-link.visible { display: block; }
 .orders-badge { background: #E86B2A; color: white; border-radius: 10px; padding: 1px 7px; font-size: 11px; margin-left: 4px; }
+.menu-img { cursor: pointer; }
+.image-viewer { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 400; justify-content: center; align-items: center; }
+.image-viewer.show { display: flex; }
+.image-viewer img { max-width: 95%; max-height: 85%; object-fit: contain; border-radius: 8px; }
+.image-viewer .close-btn { position: absolute; top: 24px; right: 20px; width: 40px; height: 40px; border-radius: 20px; background: rgba(255,255,255,0.2); border: none; color: white; font-size: 22px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 </style>
 </head>
 <body>
@@ -77,7 +82,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <div class="cart-bar">
     <div class="cart-info">
       <span class="cart-count" id="cartCount">0 article(s)</span>
-      <span class="cart-total" id="cartTotal">0.00 €</span>
+      <span class="cart-total" id="cartTotal">0.00 <span id="deviseCartBar"></span></span>
     </div>
     <div class="cart-actions">
       <button class="orders-link" id="ordersLink" onclick="viewMyOrders()">📋 Voir commande <span class="orders-badge" id="ordersBadge">0</span></button>
@@ -117,6 +122,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <div class="toast" id="toast"></div>
 
+<div class="image-viewer" id="imageViewer" onclick="closeImageViewer()">
+  <button class="close-btn" onclick="closeImageViewer()">✕</button>
+  <img id="viewerImg" src="" alt="Image du plat" onclick="event.stopPropagation()" />
+</div>
+
 <script>
 const params = new URLSearchParams(window.location.search);
 const tableId = params.get('tableId') || '1';
@@ -124,6 +134,22 @@ const restaurantId = params.get('restaurantId') || '1';
 let sessionKey = '';
 let clientId = 'CLI-' + Math.random().toString(36).substr(2, 4).toUpperCase();
 let commandesCount = 0;
+let devise = '€';
+let restaurantNom = 'RestoPro';
+
+async function loadRestaurantInfo() {
+  try {
+    const res = await fetch(`/api/restaurants/public/${restaurantId}`);
+    if (res.ok) {
+      const info = await res.json();
+      if (info.devise) devise = info.devise;
+      if (info.nom) {
+        restaurantNom = info.nom;
+        document.querySelector('.header h1').textContent = '🍽 ' + restaurantNom;
+      }
+    }
+  } catch(e) { /* garde les valeurs par défaut */ }
+}
 
 document.getElementById('tableBadge').textContent = 'Table ' + tableId + ' • Client ' + clientId;
 
@@ -133,6 +159,7 @@ let cart = [];
 let selectedCat = null;
 
 async function loadMenu() {
+  await loadRestaurantInfo();
   try {
     const res = await fetch(`/api/menu/public/${restaurantId}`);
     categories = await res.json();
@@ -154,14 +181,14 @@ function render() {
   document.getElementById('menuList').innerHTML = filtered.map(m => `
     <div class="menu-item" onclick="addToCart(${m.id})">
       <div class="menu-left">
-        ${m.image ? `<img src="${m.image}" class="menu-img" onerror="this.style.display='none'">` : ''}
+        ${m.image ? `<img src="${m.image}" class="menu-img" onerror="this.style.display='none'" onclick="event.stopPropagation();openImageViewer('${m.image}')">` : ''}
         <div class="menu-left-text">
           <h3>${m.nom}</h3>
           <span>${m.categorieNom}${m.tempsPreparation ? ' • '+m.tempsPreparation+' min' : ''}</span>
         </div>
       </div>
       <div class="menu-right">
-        <span class="price">${Number(m.prix).toFixed(2)} €</span>
+        <span class="price">${formatPrix(m.prix)}</span>
         <div class="add-btn">+</div>
       </div>
     </div>
@@ -169,6 +196,8 @@ function render() {
 
   updateCartBar();
 }
+
+function formatPrix(montant) { return Number(montant).toFixed(2) + ' ' + devise; }
 
 function selectCat(catId) { selectedCat = catId; render(); }
 
@@ -197,7 +226,7 @@ function updateCartBar() {
   const count = cart.reduce((s, c) => s + c.quantite, 0);
   const total = cart.reduce((s, c) => s + c.prix * c.quantite, 0);
   document.getElementById('cartCount').textContent = count + ' article(s)';
-  document.getElementById('cartTotal').textContent = total.toFixed(2) + ' €';
+  document.getElementById('cartTotal').textContent = formatPrix(total);
   document.getElementById('orderBtn').disabled = count === 0;
 }
 
@@ -226,12 +255,12 @@ function renderCartItems() {
         <span class="qty">${c.quantite}</span>
         <button class="qty-btn" onclick="updateQty(${c.menuId},1)">+</button>
         <span class="cart-item-name">${c.nom}</span>
-        <span class="cart-item-price">${(c.prix * c.quantite).toFixed(2)} €</span>
+        <span class="cart-item-price">${formatPrix(c.prix * c.quantite)}</span>
         <button class="remove-btn" onclick="removeItem(${c.menuId})">×</button>
       </div>
     `).join('') || '<p style="text-align:center;color:#999;padding:20px">Panier vide</p>'}
     <div style="text-align:right;padding:16px 0;font-size:18px;font-weight:800">
-      Total: <span style="color:#E86B2A">${total.toFixed(2)}</span> €
+      Total: <span style="color:#E86B2A">${formatPrix(total)}</span>
     </div>
     <button class="order-btn" style="width:100%;padding:14px" onclick="submitOrder()">📤 Confirmer la commande</button>
     <button style="width:100%;padding:12px;margin-top:8px;background:none;border:1px solid #ddd;border-radius:25px;font-size:14px;color:#999" onclick="closeCart()">Fermer</button>
@@ -263,7 +292,7 @@ async function submitOrder() {
       document.getElementById('ordersBadge').textContent = commandesCount;
       closeCart();
       const total = cart.reduce((s, c) => s + c.prix * c.quantite, 0);
-      document.getElementById('successAmount').textContent = total.toFixed(2) + ' €';
+      document.getElementById('successAmount').textContent = formatPrix(total);
       document.getElementById('successHint').textContent = commandesCount > 1
         ? 'Commande #' + commandesCount + ' de ' + clientId + ' sur table ' + tableId
         : 'D\'autres personnes à votre table peuvent aussi scanner le QR code !';
@@ -309,21 +338,29 @@ async function viewMyOrders() {
         ${cmd.details.map(d => `
           <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">
             <span>${d.quantite}x ${d.menu?.nom || 'Plat'}</span>
-            <span style="color:#666">${(Number(d.prix) * d.quantite).toFixed(2)} €</span>
+            <span style="color:#666">${formatPrix(Number(d.prix) * d.quantite)}</span>
           </div>
         `).join('')}
         <div style="border-top:1px solid #ddd;margin-top:6px;padding-top:6px;text-align:right;font-weight:700">
-          Total: ${Number(cmd.montantTotal).toFixed(2)} €
+          Total: ${formatPrix(cmd.montantTotal)}
         </div>
       </div>
     `}).join('')
     + `<div style="background:#FFF3E0;border-radius:12px;padding:14px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;border:2px solid #E86B2A">
         <strong style="font-size:16px">Total global</strong>
-        <span style="font-size:20px;font-weight:800;color:#E86B2A">${grandTotal.toFixed(2)} €</span>
+        <span style="font-size:20px;font-weight:800;color:#E86B2A">${formatPrix(grandTotal)}</span>
       </div>`;
   } catch(e) {
     document.getElementById('historyContent').innerHTML = '<p style="text-align:center;color:#f44336;padding:20px">Erreur de chargement</p>';
   }
+}
+
+function openImageViewer(src) {
+  document.getElementById('viewerImg').src = src;
+  document.getElementById('imageViewer').classList.add('show');
+}
+function closeImageViewer() {
+  document.getElementById('imageViewer').classList.remove('show');
 }
 
 function showToast(msg, isError = false) {

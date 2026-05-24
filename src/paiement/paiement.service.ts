@@ -15,7 +15,7 @@ export class PaiementService {
   async payerCommande(commandeId: number, mode: ModePaiement, caissierId: number) {
     const commande = await this.prisma.commande.findUnique({
       where: { id: commandeId },
-      include: { table: true },
+      include: { table: { include: { restaurant: { select: { devise: true } } } } },
     });
 
     if (!commande) throw new BadRequestException('Commande introuvable');
@@ -55,7 +55,7 @@ export class PaiementService {
     if (commande.serveurId) {
       await this.notificationsService.create(
         commande.serveurId,
-        `Paiement reçu table ${commande.table.numero} — ${Number(commande.montantTotal).toFixed(2)} €`,
+        `Paiement reçu table ${commande.table.numero} — ${Number(commande.montantTotal).toFixed(2)} ${commande.table.restaurant?.devise || '€'}`,
       );
     }
     this.socketGateway.notifierAdmin({

@@ -12,6 +12,7 @@ model Restaurant {
   id              Int               @id @default(autoincrement())
   nom             String            @db.VarChar(255)
   adresse         String            @db.Text
+  devise          String            @default("€") @db.VarChar(10)
   utilisateurs    Utilisateur[]
   tables          TableRestaurant[]
   categories      CategorieMenu[]

@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,6 +15,7 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.prisma.utilisateur.findUnique({
       where: { telephone: dto.telephone },
+      include: { restaurant: { select: { nom: true, devise: true } } },
     });
 
     if (!user) {
@@ -77,6 +78,8 @@ export class AuthService {
         role: user.role,
         photo: user.photo,
         restaurantId: user.restaurantId,
+        devise: user.restaurant?.devise || '€',
+        restaurantNom: user.restaurant?.nom || '',
       },
     };
   }
@@ -121,6 +124,48 @@ export class AuthService {
         restaurantId: true,
         restaurant: true,
       },
+    });
+    return user;
+  }
+
+  async forgotPassword(telephone: string, newPassword: string) {
+    const user = await this.prisma.utilisateur.findUnique({
+      where: { telephone },
+    });
+    if (!user) {
+      throw new BadRequestException('Aucun utilisateur trouvé avec ce numéro');
+    }
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.prisma.utilisateur.update({
+      where: { id: user.id },
+      data: { mot_de_passe: hashedPassword },
+    });
+    return { message: 'Mot de passe réinitialisé avec succès' };
+  }
+
+  async changePassword(userId: number, oldPassword: string, newPassword: string) {
+    const user = await this.prisma.utilisateur.findUnique({ where: { id: userId } });
+    if (!user) throw new BadRequestException('Utilisateur introuvable');
+
+    const isValid = await bcrypt.compare(oldPassword, user.mot_de_passe);
+    if (!isValid) throw new BadRequestException('Ancien mot de passe incorrect');
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.prisma.utilisateur.update({
+      where: { id: userId },
+      data: { mot_de_passe: hashedPassword },
+    });
+    return { message: 'Mot de passe modifié avec succès' };
+  }
+
+  async updateProfile(userId: number, data: { nom?: string; photo?: string }) {
+    const updateData: any = {};
+    if (data.nom !== undefined) updateData.nom = data.nom;
+    if (data.photo !== undefined) updateData.photo = data.photo;
+    const user = await this.prisma.utilisateur.update({
+      where: { id: userId },
+      data: updateData,
+      select: { id: true, nom: true, telephone: true, role: true, photo: true, statut: true, restaurantId: true },
     });
     return user;
   }

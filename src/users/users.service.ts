@@ -41,4 +41,20 @@ export class UsersService {
       data: { statut },
     });
   }
+
+  async update(userId: number, data: { nom?: string; telephone?: string; role?: Role; mot_de_passe?: string }) {
+    const updateData: any = {};
+    if (data.nom) updateData.nom = data.nom;
+    if (data.telephone) updateData.telephone = data.telephone;
+    if (data.role) updateData.role = data.role;
+    if (data.mot_de_passe) {
+      const bcrypt = require('bcryptjs');
+      updateData.mot_de_passe = await bcrypt.hash(data.mot_de_passe, 10);
+    }
+    return this.prisma.utilisateur.update({
+      where: { id: userId },
+      data: updateData,
+      select: { id: true, nom: true, telephone: true, role: true, statut: true, photo: true },
+    });
+  }
 }

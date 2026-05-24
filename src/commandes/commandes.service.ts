@@ -20,6 +20,7 @@ export class CommandesService {
   }) {
     const table = await this.prisma.tableRestaurant.findUnique({
       where: { id: data.tableId },
+      include: { restaurant: { select: { devise: true } } },
     });
 
     if (!table) {
@@ -93,7 +94,7 @@ export class CommandesService {
       this.socketGateway.notifierNouvelleCommande(table.serveurId, commande);
       await this.notificationsService.create(
         table.serveurId,
-        `Nouvelle commande sur table ${table.numero} — ${Number(commande.montantTotal).toFixed(2)} €`,
+        `Nouvelle commande sur table ${table.numero} — ${Number(commande.montantTotal).toFixed(2)} ${table.restaurant?.devise || '€'}`,
       );
     }
     // Router vers cuisine/bar selon les articles

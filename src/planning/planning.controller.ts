@@ -11,6 +11,12 @@ export class PlanningController {
   constructor(private planningService: PlanningService) {}
 
   @Roles(Role.ADMIN, Role.MANAGER)
+  @Get()
+  findAll(@Request() req) {
+    return this.planningService.findAll(req.user.restaurantId);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Post()
   create(@Body() data: { utilisateurId: number; jour: string; heureDebut: string; heureFin: string }) {
     return this.planningService.create(data);

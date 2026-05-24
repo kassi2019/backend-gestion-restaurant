@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Patch, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -20,6 +20,12 @@ export class UsersController {
   @Get('role/:role')
   findByRole(@Request() req, @Param('role') role: Role) {
     return this.usersService.findByRole(req.user.restaurantId, role);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() data: { nom?: string; telephone?: string; role?: Role; mot_de_passe?: string }) {
+    return this.usersService.update(+id, data);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)

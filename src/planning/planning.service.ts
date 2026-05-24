@@ -21,6 +21,18 @@ export class PlanningService {
     });
   }
 
+  async findAll(restaurantId: number) {
+    return this.prisma.planning.findMany({
+      where: { utilisateur: { restaurantId } },
+      include: {
+        utilisateur: {
+          select: { id: true, nom: true, role: true },
+        },
+      },
+      orderBy: { jour: 'asc' },
+    });
+  }
+
   async findByUser(utilisateurId: number) {
     return this.prisma.planning.findMany({
       where: { utilisateurId },

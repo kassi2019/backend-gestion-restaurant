@@ -16,4 +16,18 @@ export class RestaurantService {
   async findOne(id: number) {
     return this.prisma.restaurant.findUnique({ where: { id } });
   }
+
+  async getPublicInfo(id: number) {
+    return this.prisma.restaurant.findUnique({
+      where: { id },
+      select: { id: true, nom: true, devise: true },
+    });
+  }
+
+  async update(id: number, data: { nom?: string; adresse?: string; devise?: string }) {
+    return this.prisma.restaurant.update({
+      where: { id },
+      data,
+    });
+  }
 }
