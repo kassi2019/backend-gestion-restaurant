@@ -25,9 +25,10 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   const port = process.env.PORT || 3000;
+  const adresseIp = process.env.ADRESSE_IP || 'http://localhost';
   await app.listen(port);
-  console.log(`Serveur demarre sur http://192.168.1.7:${port}`);
-  console.log(`QR Codes: http://192.168.1.7:${port}/qrcodes.html`);
-  console.log(`Client: http://192.168.1.7:${port}/client.html`);
+  console.log(`Serveur demarre sur ${adresseIp}:${port}`);
+  console.log(`QR Codes: ${adresseIp}:${port}/qrcodes.html`);
+  console.log(`Client: ${adresseIp}:${port}/client.html`);
 }
 bootstrap();

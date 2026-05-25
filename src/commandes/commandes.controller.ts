@@ -72,4 +72,11 @@ export class CommandesController {
   findBySessionKey(@Param('sessionKey') sessionKey: string) {
     return this.commandesService.findBySessionKey(sessionKey);
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR, Role.CUISINE, Role.BAR)
+  @Get('stats')
+  getStats(@Request() req) {
+    return this.commandesService.getStats(req.user.restaurantId, req.user.id, req.user.role);
+  }
 }

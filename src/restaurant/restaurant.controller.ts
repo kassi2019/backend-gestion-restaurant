@@ -17,7 +17,7 @@ export class RestaurantController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Post()
-  create(@Body() data: { nom: string; adresse: string }) {
+  create(@Body() data: { nom: string; adresse: string; telephone?: string; devise?: string }) {
     return this.restaurantService.create(data);
   }
 
@@ -37,7 +37,7 @@ export class RestaurantController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() data: { nom?: string; adresse?: string; devise?: string }) {
+  update(@Param('id') id: string, @Body() data: { nom?: string; adresse?: string; devise?: string; telephone?: string }) {
     return this.restaurantService.update(+id, data);
   }
 }

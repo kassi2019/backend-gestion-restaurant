@@ -133,7 +133,7 @@ export class PaiementService {
       include: {
         commande: {
           include: {
-            table: true,
+            table: { include: { restaurant: { select: { nom: true, adresse: true, devise: true } } } },
             details: { include: { menu: true } },
             serveur: { select: { nom: true } },
           },
@@ -141,6 +141,32 @@ export class PaiementService {
         caissier: { select: { nom: true } },
       },
     });
+  }
+
+  async getFactureForPrint(id: number) {
+    const facture = await this.getFactureById(id);
+    if (!facture) return null;
+
+    const resto = facture.commande.table.restaurant;
+    const cmd = facture.commande;
+    const articles = cmd.details.map((d) => ({
+      quantite: d.quantite,
+      nom: d.menu?.nom || 'Plat',
+      prix: Number(d.prix),
+      total: Number(d.prix) * d.quantite,
+    }));
+
+    return {
+      numero: facture.numero,
+      date: facture.dateFacture,
+      restaurant: { nom: resto.nom, adresse: resto.adresse, devise: resto.devise },
+      table: cmd.table.numero,
+      serveur: cmd.serveur?.nom || '-',
+      caissier: facture.caissier?.nom || '-',
+      modePaiement: facture.modePaiement === 'ESPECES' ? 'Espèces' : facture.modePaiement === 'MOBILE_MONEY' ? 'Mobile Money' : 'Carte Bancaire',
+      articles,
+      total: Number(facture.montantTotal),
+    };
   }
 
   async getCaisseJour(restaurantId: number) {

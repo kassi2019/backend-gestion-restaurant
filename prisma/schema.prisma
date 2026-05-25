@@ -13,6 +13,7 @@ model Restaurant {
   nom             String            @db.VarChar(255)
   adresse         String            @db.Text
   devise          String            @default("€") @db.VarChar(10)
+  telephone       String?           @db.VarChar(30)
   utilisateurs    Utilisateur[]
   tables          TableRestaurant[]
   categories      CategorieMenu[]

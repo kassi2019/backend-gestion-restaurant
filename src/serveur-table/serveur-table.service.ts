@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -37,28 +37,69 @@ export class ServeurTableService {
   }
 
   async assign(utilisateurId: number, tableId: number) {
-    // Désactiver l'ancienne affectation si elle existe
+    await this.checkTableDisponibleToday(tableId, utilisateurId);
+
     await this.prisma.serveurTable.updateMany({
       where: { tableId, statut: 'ACTIF' },
       data: { statut: 'INACTIF' },
     });
 
-    // Créer la nouvelle affectation
     const assignation = await this.prisma.serveurTable.create({
-      data: {
-        utilisateurId,
-        tableId,
-        statut: 'ACTIF',
-      },
+      data: { utilisateurId, tableId, statut: 'ACTIF' },
     });
 
-    // Mettre à jour le serveur sur la table
     await this.prisma.tableRestaurant.update({
       where: { id: tableId },
       data: { serveurId: utilisateurId },
     });
 
     return assignation;
+  }
+
+  async assignBulk(utilisateurId: number, tableIds: number[]) {
+    for (const tableId of tableIds) {
+      await this.checkTableDisponibleToday(tableId, utilisateurId);
+    }
+
+    const results: any[] = [];
+    for (const tableId of tableIds) {
+      await this.prisma.serveurTable.updateMany({
+        where: { tableId, statut: 'ACTIF' },
+        data: { statut: 'INACTIF' },
+      });
+      const assignation = await this.prisma.serveurTable.create({
+        data: { utilisateurId, tableId, statut: 'ACTIF' },
+      });
+      await this.prisma.tableRestaurant.update({
+        where: { id: tableId },
+        data: { serveurId: utilisateurId },
+      });
+      results.push(assignation);
+    }
+    return { affected: results.length, assignments: results };
+  }
+
+  private async checkTableDisponibleToday(tableId: number, utilisateurId: number) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const existing = await this.prisma.serveurTable.findFirst({
+      where: {
+        tableId,
+        statut: 'ACTIF',
+        utilisateurId: { not: utilisateurId },
+        dateAffectation: { gte: today, lt: tomorrow },
+      },
+      include: { utilisateur: { select: { nom: true } } },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        `La table est déjà assignée à ${existing.utilisateur.nom} aujourd'hui. Utilisez la réassignation en cas d'absence.`,
+      );
+    }
   }
 
   async unassign(tableId: number) {

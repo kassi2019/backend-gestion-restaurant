@@ -85,7 +85,7 @@ export class CommandesService {
 
     // La table sera passée à OCCUPEE lors de la validation par le serveur
 
-    // 🔔 Notifications
+    // Notifier uniquement le serveur à la création (cuisine/bar après validation)
     if (table.serveurId) {
       this.socketGateway.notifierNouvelleCommande(table.serveurId, commande);
       await this.notificationsService.create(
@@ -93,15 +93,6 @@ export class CommandesService {
         `Nouvelle commande sur table ${table.numero} — ${Number(commande.montantTotal).toFixed(2)} ${table.restaurant?.devise || '€'}`,
       );
     }
-    // Router vers cuisine/bar selon les articles
-    const aCuisine = commande.details.some((d: any) =>
-      ['CUISINE', 'DESSERT'].includes(d.menu?.categorie?.destination),
-    );
-    const aBar = commande.details.some((d: any) =>
-      d.menu?.categorie?.destination === 'BAR',
-    );
-    if (aCuisine) this.socketGateway.notifierCuisine(commande);
-    if (aBar) this.socketGateway.notifierBar(commande);
 
     return commande;
   }
@@ -148,6 +139,7 @@ export class CommandesService {
     const commandes = await this.prisma.commande.findMany({
       where: {
         table: { restaurantId },
+        statut: { notIn: ['EN_ATTENTE', 'ANNULEE', 'PAYEE', 'SERVIE'] },
       },
       include: {
         details: {
@@ -167,6 +159,7 @@ export class CommandesService {
     const commandes = await this.prisma.commande.findMany({
       where: {
         table: { restaurantId },
+        statut: { notIn: ['EN_ATTENTE', 'ANNULEE', 'PAYEE', 'SERVIE'] },
       },
       include: {
         details: {
@@ -193,7 +186,7 @@ export class CommandesService {
       data: { statut },
     });
 
-    // Table → OCCUPEE quand le serveur valide la commande
+    // Table → OCCUPEE quand le serveur valide
     if (statut === 'VALIDEE' && commande?.tableId) {
       await this.prisma.tableRestaurant.update({
         where: { id: commande.tableId },
@@ -201,16 +194,48 @@ export class CommandesService {
       });
     }
 
-    // 🔔 Notification au serveur
+    // Notifications DB + Socket
     if (commande?.serveurId) {
       const label = {
         VALIDEE: 'validée', EN_PREPARATION: 'en préparation',
         PRETE: 'prête', SERVIE: 'servie', ANNULEE: 'annulée',
       }[statut] || statut;
-      await this.notificationsService.create(
-        commande.serveurId,
-        `Commande table ${commande.table.numero} → ${label}`,
-      );
+      const message = `Commande table ${commande.table.numero} → ${label}`;
+      await this.notificationsService.create(commande.serveurId, message);
+
+      // Socket: serveur en temps réel
+      this.socketGateway.server
+        .to(`serveur:${commande.serveurId}`)
+        .emit('commande_status_change', {
+          commandeId, tableNumero: commande.table.numero,
+          statut, label, message,
+        });
+
+      // Socket: admins/managers
+      this.socketGateway.server
+        .to('admin')
+        .emit('commande_status_change', {
+          commandeId, tableNumero: commande.table.numero,
+          statut, label, serveurNom: commande.serveur?.nom, message,
+        });
+
+      // Quand le serveur valide → notifier cuisine/bar en temps réel
+      if (statut === 'VALIDEE') {
+        const cmd = await this.prisma.commande.findUnique({
+          where: { id: commandeId },
+          include: { details: { include: { menu: { include: { categorie: true } } } }, table: true },
+        });
+        if (cmd) {
+          const aCuisine = cmd.details.some((d: any) =>
+            ['CUISINE', 'DESSERT'].includes(d.menu?.categorie?.destination),
+          );
+          const aBar = cmd.details.some((d: any) =>
+            d.menu?.categorie?.destination === 'BAR',
+          );
+          if (aCuisine) this.socketGateway.notifierCuisine(cmd);
+          if (aBar) this.socketGateway.notifierBar(cmd);
+        }
+      }
     }
 
     return updated;
@@ -246,5 +271,58 @@ export class CommandesService {
       },
       orderBy: { dateCommande: 'desc' },
     });
+  }
+
+  async getStats(restaurantId: number, userId: number, role: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const isAdminOrManager = role === 'ADMIN' || role === 'MANAGER';
+
+    const where: any = {
+      table: { restaurantId },
+      dateCommande: { gte: today, lt: tomorrow },
+    };
+
+    if (!isAdminOrManager && role === 'SERVEUR') {
+      where.serveurId = userId;
+    }
+
+    const commandes = await this.prisma.commande.findMany({
+      where,
+      select: { statut: true },
+    });
+
+    const stats: Record<string, number> = {
+      EN_ATTENTE: 0, VALIDEE: 0, EN_PREPARATION: 0,
+      PRETE: 0, SERVIE: 0, PAYEE: 0, ANNULEE: 0,
+    };
+
+    for (const c of commandes) {
+      if (stats[c.statut] !== undefined) stats[c.statut]++;
+    }
+
+    let totalTables = 0;
+    if (isAdminOrManager) {
+      totalTables = await this.prisma.tableRestaurant.count({ where: { restaurantId } });
+    } else if (role === 'SERVEUR') {
+      totalTables = await this.prisma.tableRestaurant.count({
+        where: { restaurantId, serveurId: userId },
+      });
+    }
+
+    return {
+      totalTables,
+      totalCommandes: commandes.length,
+      enAttente: stats.EN_ATTENTE,
+      validees: stats.VALIDEE,
+      enPreparation: stats.EN_PREPARATION,
+      pretes: stats.PRETE,
+      servies: stats.SERVIE,
+      payees: stats.PAYEE,
+      annulees: stats.ANNULEE,
+    };
   }
 }

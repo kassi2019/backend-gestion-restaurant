@@ -1,5 +1,7 @@
-import { Controller, Get, Post, Param, Body, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { PaiementService } from './paiement.service';
+import { genererFactureHTML } from './facture-html.template';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -36,6 +38,17 @@ export class PaiementController {
   @Get('factures/:id')
   getFacture(@Param('id') id: string) {
     return this.paiementService.getFactureById(+id);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER, Role.CAISSIER)
+  @Get('factures/:id/imprimer')
+  async imprimerFacture(@Param('id') id: string, @Res() res: Response) {
+    const data = await this.paiementService.getFactureForPrint(+id);
+    if (!data) return res.status(404).send('Facture introuvable');
+
+    const html = genererFactureHTML(data);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.CAISSIER)

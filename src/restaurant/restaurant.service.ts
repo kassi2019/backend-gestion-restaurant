@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class RestaurantService {
   constructor(private prisma: PrismaService) {}
 
-  async create(data: { nom: string; adresse: string }) {
+  async create(data: { nom: string; adresse: string; telephone?: string; devise?: string }) {
     return this.prisma.restaurant.create({ data });
   }
 
@@ -24,7 +24,7 @@ export class RestaurantService {
     });
   }
 
-  async update(id: number, data: { nom?: string; adresse?: string; devise?: string }) {
+  async update(id: number, data: { nom?: string; adresse?: string; devise?: string; telephone?: string }) {
     return this.prisma.restaurant.update({
       where: { id },
       data,

@@ -13,6 +13,7 @@ async function main() {
     create: {
       nom: 'RestoPro Demo',
       adresse: '123 Avenue du Restaurant, Kinshasa',
+      telephone: '+243990000000',
     },
   });
   console.log('Restaurant créé:', restaurant.nom);

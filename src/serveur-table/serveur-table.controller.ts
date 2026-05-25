@@ -38,6 +38,12 @@ export class ServeurTableController {
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('bulk')
+  assignBulk(@Body() data: { utilisateurId: number; tableIds: number[] }) {
+    return this.serveurTableService.assignBulk(data.utilisateurId, data.tableIds);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Delete(':tableId')
   unassign(@Param('tableId') tableId: string) {
     return this.serveurTableService.unassign(+tableId);

@@ -131,11 +131,45 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 const params = new URLSearchParams(window.location.search);
 const tableId = params.get('tableId') || '1';
 const restaurantId = params.get('restaurantId') || '1';
-let sessionKey = '';
-let clientId = 'CLI-' + Math.random().toString(36).substr(2, 4).toUpperCase();
+
+// Persistance sessionStorage : survit au rechargement de la page
+// On vérifie que c'est la même table (sinon on réinitialise)
+const savedTableId = sessionStorage.getItem('rp_tableId');
+if (savedTableId === tableId) {
+  var sessionKey = sessionStorage.getItem('rp_sessionKey') || '';
+  var clientId = sessionStorage.getItem('rp_clientId') || ('CLI-' + Math.random().toString(36).substr(2, 4).toUpperCase());
+} else {
+  // Table différente : nouvelle session
+  var sessionKey = '';
+  var clientId = 'CLI-' + Math.random().toString(36).substr(2, 4).toUpperCase();
+  sessionStorage.removeItem('rp_sessionKey');
+  sessionStorage.removeItem('rp_clientId');
+}
 let commandesCount = 0;
 let devise = '€';
 let restaurantNom = 'RestoPro';
+
+function saveSession() {
+  try {
+    sessionStorage.setItem('rp_sessionKey', sessionKey);
+    sessionStorage.setItem('rp_clientId', clientId);
+    sessionStorage.setItem('rp_tableId', tableId);
+  } catch(e) { /* ignore */ }
+}
+
+// Si une session existe déjà, restaurer le compteur et afficher le lien
+async function restoreSession() {
+  if (!sessionKey) return;
+  try {
+    const res = await fetch(`/api/commandes/client-session/${sessionKey}`);
+    const commandes = await res.json();
+    if (Array.isArray(commandes) && commandes.length > 0) {
+      commandesCount = commandes.length;
+      document.getElementById('ordersLink').classList.add('visible');
+      document.getElementById('ordersBadge').textContent = commandesCount;
+    }
+  } catch(e) { /* ignore */ }
+}
 
 async function loadRestaurantInfo() {
   try {
@@ -286,7 +320,10 @@ async function submitOrder() {
     });
     const data = await res.json();
     if (res.ok) {
-      if (data.session) sessionKey = data.session.sessionKey;
+      if (data.session) {
+          sessionKey = data.session.sessionKey;
+          saveSession();
+        }
       commandesCount++;
       document.getElementById('ordersLink').classList.add('visible');
       document.getElementById('ordersBadge').textContent = commandesCount;
@@ -371,6 +408,7 @@ function showToast(msg, isError = false) {
 }
 
 loadMenu();
+restoreSession();
 </script>
 </body>
 </html>
