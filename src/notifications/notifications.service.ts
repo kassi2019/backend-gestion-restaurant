@@ -1,14 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SocketGateway } from '../socket/socket.gateway';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private socketGateway: SocketGateway,
+  ) {}
 
   async create(utilisateurId: number, message: string) {
-    return this.prisma.notification.create({
+    const notif = await this.prisma.notification.create({
       data: { utilisateurId, message },
     });
+
+    // Emettre en temps reel vers l'utilisateur concerne
+    this.socketGateway.notifierUtilisateur(utilisateurId, 'notification_user', {
+      id: notif.id,
+      message,
+      dateNotification: notif.dateNotification,
+    });
+
+    return notif;
   }
 
   async findByUser(user: { id: number; role: string; restaurantId: number }, date: string) {

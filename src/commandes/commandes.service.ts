@@ -85,14 +85,14 @@ export class CommandesService {
 
     // La table sera passée à OCCUPEE lors de la validation par le serveur
 
-    // Notifier uniquement le serveur à la création (cuisine/bar après validation)
+    // Notification socket : serveur assigné + admins/managers
+    const label = `Nouvelle commande sur table ${table.numero} — ${Number(commande.montantTotal).toFixed(2)} ${table.restaurant?.devise || '€'}`;
     if (table.serveurId) {
       this.socketGateway.notifierNouvelleCommande(table.serveurId, commande);
-      await this.notificationsService.create(
-        table.serveurId,
-        `Nouvelle commande sur table ${table.numero} — ${Number(commande.montantTotal).toFixed(2)} ${table.restaurant?.devise || '€'}`,
-      );
+      await this.notificationsService.create(table.serveurId, label);
     }
+    // Toujours notifier les admins/managers
+    this.socketGateway.server.to('admin').emit('nouvelle_commande', commande);
 
     return commande;
   }

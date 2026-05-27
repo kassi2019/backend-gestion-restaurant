@@ -76,4 +76,18 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   notifierAdmin(notification: any) {
     this.server.to('admin').emit('notification_admin', notification);
   }
+
+  // Notifier un utilisateur specifique (pour notifications DB)
+  notifierUtilisateur(userId: number, event: string, data: any) {
+    this.server.to(`serveur:${userId}`).emit(event, data);
+    // Also notify admins for important events
+    if (event === 'notification_user') {
+      this.server.to('admin').emit('notification_admin', data);
+    }
+  }
+
+  // Notifier tous les utilisateurs connectes (broadcast)
+  notifierTous(event: string, data: any) {
+    this.server.emit(event, data);
+  }
 }
