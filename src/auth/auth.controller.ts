@@ -44,27 +44,40 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Patch('password')
-  changePassword(@Request() req, @Body() data: { oldPassword: string; newPassword: string }) {
-    return this.authService.changePassword(req.user.id, data.oldPassword, data.newPassword);
+  changePassword(
+    @Request() req,
+    @Body() data: { oldPassword: string; newPassword: string },
+  ) {
+    return this.authService.changePassword(
+      req.user.id,
+      data.oldPassword,
+      data.newPassword,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('profile')
-  updateProfile(@Request() req, @Body() data: { nom?: string; photo?: string }) {
+  updateProfile(
+    @Request() req,
+    @Body() data: { nom?: string; photo?: string },
+  ) {
     return this.authService.updateProfile(req.user.id, data);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('photo')
-  @UseInterceptors(FileInterceptor('image', {
-    storage: diskStorage({
-      destination: './uploads/profiles',
-      filename: (_req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        cb(null, uniqueSuffix + extname(file.originalname));
-      },
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: './uploads/profiles',
+        filename: (_req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, uniqueSuffix + extname(file.originalname));
+        },
+      }),
     }),
-  }))
+  )
   uploadPhoto(@Request() req, @UploadedFile() file: Express.Multer.File) {
     const photoUrl = '/uploads/profiles/' + file.filename;
     return this.authService.updateProfile(req.user.id, { photo: photoUrl });

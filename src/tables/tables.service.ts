@@ -7,6 +7,9 @@ export class TablesService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(restaurantId: number) {
+    // Réinitialiser les tables OCCUPEE sans commande active aujourd'hui
+    await this.libererTablesOccupeesSansActivite(restaurantId);
+
     return this.prisma.tableRestaurant.findMany({
       where: { restaurantId },
       include: { serveur: { select: { id: true, nom: true } } },
@@ -14,9 +17,49 @@ export class TablesService {
   }
 
   async findByServeur(serveurId: number) {
+    // Récupérer le restaurantId via le serveur
+    const serveur = await this.prisma.utilisateur.findUnique({
+      where: { id: serveurId },
+      select: { restaurantId: true },
+    });
+    if (serveur) {
+      await this.libererTablesOccupeesSansActivite(serveur.restaurantId);
+    }
+
     return this.prisma.tableRestaurant.findMany({
       where: { serveurId },
     });
+  }
+
+  private async libererTablesOccupeesSansActivite(restaurantId: number) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Tables OCCUPEE du restaurant
+    const tablesOccupees = await this.prisma.tableRestaurant.findMany({
+      where: { restaurantId, statut: 'OCCUPEE' },
+      select: { id: true },
+    });
+
+    for (const table of tablesOccupees) {
+      // Vérifier si une commande active existe aujourd'hui pour cette table
+      const commandeActive = await this.prisma.commande.findFirst({
+        where: {
+          tableId: table.id,
+          dateCommande: { gte: today, lt: tomorrow },
+          statut: { in: ['VALIDEE', 'EN_PREPARATION', 'PRETE', 'SERVIE'] },
+        },
+      });
+
+      if (!commandeActive) {
+        await this.prisma.tableRestaurant.update({
+          where: { id: table.id },
+          data: { statut: 'LIBRE' },
+        });
+      }
+    }
   }
 
   async create(data: { numero: string; zone: string; restaurantId: number }) {

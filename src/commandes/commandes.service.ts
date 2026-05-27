@@ -118,6 +118,7 @@ export class CommandesService {
       include: {
         details: { include: { menu: true } },
         table: true,
+        serveur: { select: { id: true, nom: true, role: true } },
         session: { select: { id: true, sessionKey: true, dateArrivee: true } },
       },
       orderBy: { dateCommande: 'desc' },

@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,7 +19,9 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.prisma.utilisateur.findUnique({
       where: { telephone: dto.telephone },
-      include: { restaurant: { select: { nom: true, devise: true, telephone: true } } },
+      include: {
+        restaurant: { select: { nom: true, devise: true, telephone: true } },
+      },
     });
 
     if (!user) {
@@ -144,12 +150,19 @@ export class AuthService {
     return { message: 'Mot de passe réinitialisé avec succès' };
   }
 
-  async changePassword(userId: number, oldPassword: string, newPassword: string) {
-    const user = await this.prisma.utilisateur.findUnique({ where: { id: userId } });
+  async changePassword(
+    userId: number,
+    oldPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.prisma.utilisateur.findUnique({
+      where: { id: userId },
+    });
     if (!user) throw new BadRequestException('Utilisateur introuvable');
 
     const isValid = await bcrypt.compare(oldPassword, user.mot_de_passe);
-    if (!isValid) throw new BadRequestException('Ancien mot de passe incorrect');
+    if (!isValid)
+      throw new BadRequestException('Ancien mot de passe incorrect');
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.prisma.utilisateur.update({
@@ -166,7 +179,15 @@ export class AuthService {
     const user = await this.prisma.utilisateur.update({
       where: { id: userId },
       data: updateData,
-      select: { id: true, nom: true, telephone: true, role: true, photo: true, statut: true, restaurantId: true },
+      select: {
+        id: true,
+        nom: true,
+        telephone: true,
+        role: true,
+        photo: true,
+        statut: true,
+        restaurantId: true,
+      },
     });
     return user;
   }

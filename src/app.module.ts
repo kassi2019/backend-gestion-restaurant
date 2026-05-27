@@ -13,6 +13,7 @@ import { SocketModule } from './socket/socket.module';
 import { ServeurTableModule } from './serveur-table/serveur-table.module';
 import { PaiementModule } from './paiement/paiement.module';
 import { StatistiquesModule } from './statistiques/statistiques.module';
+import { ClientModule } from './client/client.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -29,6 +30,7 @@ import { StatistiquesModule } from './statistiques/statistiques.module';
     ServeurTableModule,
     PaiementModule,
     StatistiquesModule,
+    ClientModule,
   ],
 })
 export class AppModule {}

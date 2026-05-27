@@ -11,9 +11,28 @@ export class NotificationsService {
     });
   }
 
-  async findByUser(utilisateurId: number) {
+  async findByUser(user: { id: number; role: string; restaurantId: number }, date: string) {
+    const isAdminOrManager = user.role === 'ADMIN' || user.role === 'MANAGER';
+
+    const where: any = {};
+
+    if (!isAdminOrManager) {
+      where.utilisateurId = user.id;
+    } else {
+      where.utilisateur = { restaurantId: user.restaurantId };
+    }
+
+    const debut = new Date(date);
+    debut.setHours(0, 0, 0, 0);
+    const fin = new Date(date);
+    fin.setHours(23, 59, 59, 999);
+    where.dateNotification = { gte: debut, lte: fin };
+
     return this.prisma.notification.findMany({
-      where: { utilisateurId },
+      where,
+      include: {
+        utilisateur: { select: { id: true, nom: true, role: true } },
+      },
       orderBy: { dateNotification: 'desc' },
       take: 50,
     });

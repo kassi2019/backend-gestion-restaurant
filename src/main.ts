@@ -21,14 +21,25 @@ async function bootstrap() {
   expressApp.use(express.static(publicDir));
   expressApp.use('/uploads', express.static(uploadsDir));
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', {
+    exclude: [
+      'client',
+      'client.html',
+      'qrcodes',
+      'qrcodes.html',
+      'qr-table-:id.png',
+    ],
+  });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   const port = process.env.PORT || 3000;
-  const adresseIp = process.env.ADRESSE_IP || 'http://localhost';
-  await app.listen(port);
-  console.log(`Serveur demarre sur ${adresseIp}:${port}`);
-  console.log(`QR Codes: ${adresseIp}:${port}/qrcodes.html`);
-  console.log(`Client: ${adresseIp}:${port}/client.html`);
+  const adresseIp = (process.env.ADRESSE_IP || 'localhost').replace(
+    /^https?:\/\//,
+    '',
+  );
+  await app.listen(port, adresseIp);
+  console.log(`Serveur demarre sur http://${adresseIp}:${port}`);
+  console.log(`QR Codes: http://${adresseIp}:${port}/qrcodes.html`);
+  console.log(`Client: http://${adresseIp}:${port}/client.html`);
 }
 bootstrap();
