@@ -1,99 +1,116 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# RestoPro API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend API pour le système de gestion de restaurant avec commande par QR Code, notifications temps réel (Socket.IO) et affectation automatique des tables.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Stack technique
 
-## Description
+| Composant     | Technologie      |
+|---------------|------------------|
+| Framework     | NestJS 10        |
+| Base de données | MySQL            |
+| ORM           | Prisma 4         |
+| Temps réel    | Socket.IO 4      |
+| Authentification | JWT + Passport + Bcrypt |
+| QR Codes      | qrcode (npm)     |
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Prérequis
 
-## Project setup
+- Node.js 18+
+- MySQL 8+
+- npm
+
+## Installation
 
 ```bash
 $ npm install
 ```
 
-## Compile and run the project
+## Configuration
+
+Créer un fichier `.env` à la racine :
+
+```env
+DATABASE_URL="mysql://root:P@ssw0rd@localhost:3306/gestion_restaurant"
+JWT_SECRET="votre-secret-jwt"
+PORT=3000
+ADRESSE_IP=0.0.0.0
+```
+
+- `ADRESSE_IP=0.0.0.0` écoute sur toutes les interfaces réseau (LAN et localhost)
+- `ADRESSE_IP=192.168.x.x` pour une IP spécifique
+
+## Base de données
 
 ```bash
-# development
-$ npm run start
+# Appliquer les migrations
+$ npx prisma migrate deploy
 
-# watch mode
+# Données de démonstration (restaurant, utilisateurs, menus, tables)
+$ npm run seed
+```
+
+### Utilisateurs de test (après seed)
+
+| Rôle      | Téléphone   | Mot de passe |
+|-----------|-------------|--------------|
+| Admin     | 0990000000  | 123456       |
+| Serveur   | 0990000001  | 123456       |
+| Cuisine   | 0990000002  | 123456       |
+| Bar       | 0990000003  | 123456       |
+
+## Lancement
+
+```bash
+# Développement (watch mode)
 $ npm run start:dev
 
-# production mode
+# Production
+$ npm run build
 $ npm run start:prod
 ```
 
-## Run tests
+Le serveur démarre sur `http://<ADRESSE_IP>:3000`.
 
-```bash
-# unit tests
-$ npm run test
+## Structure du projet
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+```
+src/
+├── auth/            # Authentification (JWT, rôles, guards)
+├── users/           # Gestion des utilisateurs
+├── restaurant/      # Configuration du restaurant
+├── tables/          # Gestion des tables et QR codes
+├── menu/            # Menus, catégories, images
+├── commandes/       # Cycle de vie des commandes
+├── paiement/        # Paiements, factures, caisse
+├── planning/        # Planning des employés
+├── serveur-table/   # Affectation serveurs/tables
+├── notifications/   # Centre de notifications
+├── socket/          # Passerelle Socket.IO
+├── statistiques/    # Dashboard et analytics
+├── client/          # Pages client (HTML, QR codes)
+└── prisma/          # Service Prisma global
 ```
 
-## Deployment
+## API — Aperçu
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Toutes les routes sont préfixées par `/api` sauf les routes client (`/client`, `/qrcodes`, `/qr-table-*.png`).
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+| Module          | Préfixe             | Accès                        |
+|-----------------|---------------------|------------------------------|
+| Auth            | `/api/auth`         | Public + JWT                 |
+| Users           | `/api/users`        | ADMIN, MANAGER               |
+| Restaurants     | `/api/restaurants`  | Public + ADMIN               |
+| Tables          | `/api/tables`       | JWT                          |
+| Menu            | `/api/menu`         | Public + ADMIN, MANAGER      |
+| Commandes       | `/api/commandes`    | Public + JWT                 |
+| Paiements       | `/api/paiements`    | ADMIN, MANAGER, CAISSIER     |
+| Planning        | `/api/planning`     | JWT                          |
+| Serveur-Tables  | `/api/serveur-tables` | ADMIN, MANAGER, SERVEUR   |
+| Notifications   | `/api/notifications`| JWT                          |
+| Statistiques    | `/api/statistiques` | ADMIN, MANAGER               |
+| Client          | `/client`, `/qrcodes` | Public                    |
 
-```bash
-$ npm install -g mau
-$ mau deploy
-```
+## Documentation
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- [DOCUMENTATION.md](./DOCUMENTATION.md) — Parcours fonctionnel complet
+- [Cahier_Des_Charges_Restaurant_QRCode_v2.md](./Cahier_Des_Charges_Restaurant_QRCode_v2.md) — Spécifications techniques

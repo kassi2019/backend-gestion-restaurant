@@ -42,6 +42,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
         break;
       case 'MANAGER':
       case 'ADMIN':
+      case 'CAISSIER':
         client.join('admin');
         break;
     }
@@ -84,6 +85,12 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (event === 'notification_user') {
       this.server.to('admin').emit('notification_admin', data);
     }
+  }
+
+  // Notifier une demande de facture au serveur et a la caisse
+  notifierDemandeFacture(serveurId: number, data: any) {
+    this.server.to(`serveur:${serveurId}`).emit('demande_facture', data);
+    this.server.to('admin').emit('demande_facture', data);
   }
 
   // Notifier tous les utilisateurs connectes (broadcast)

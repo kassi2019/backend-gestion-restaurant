@@ -45,12 +45,14 @@ export class PaiementService {
       },
     });
 
-    // Libérer la table seulement s'il n'y a plus de commandes non payées
+    // Libérer la table seulement s'il n'y a plus de commandes actives
+    // Une commande active = validée par le serveur et non payée, non annulée
+    // Les EN_ATTENTE ne comptent pas (pas encore validées par le serveur)
     const commandesActives = await this.prisma.commande.count({
       where: {
         tableId: commande.tableId,
         statutPaiement: 'NON_PAYEE',
-        statut: { not: 'ANNULEE' },
+        statut: { notIn: ['ANNULEE', 'EN_ATTENTE'] },
       },
     });
     if (commandesActives === 0) {
@@ -77,9 +79,10 @@ export class PaiementService {
     return {
       message: 'Paiement effectué avec succès',
       facture: {
+        id: facture.id,
         numero: facture.numero,
         table: commande.table.numero,
-        montant: Number(commande.montantTotal),
+        montant: Number(facture.montantTotal),
         mode,
         date: facture.dateFacture,
       },

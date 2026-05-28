@@ -14,6 +14,21 @@ export class CommandesController {
     return this.commandesService.createFromClient(data);
   }
 
+  @Post('demande-facture')
+  demandeFacture(@Body() data: { tableId: number; sessionKey?: string }) {
+    return this.commandesService.demandeFacture(data);
+  }
+
+  @Post('client-annuler')
+  annulerFromClient(@Body() data: { commandeId: number; sessionKey: string }) {
+    return this.commandesService.annulerFromClient(data.commandeId, data.sessionKey);
+  }
+
+  @Post('client-annuler-detail')
+  annulerDetailFromClient(@Body() data: { detailId: number; sessionKey: string }) {
+    return this.commandesService.annulerDetailFromClient(data.detailId, data.sessionKey);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get()
@@ -43,7 +58,7 @@ export class CommandesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR, Role.CUISINE, Role.BAR)
   @Patch(':id/statut')
   updateStatut(@Param('id') id: string, @Body() data: { statut: StatutCommande }) {
     return this.commandesService.updateStatut(+id, data.statut);
@@ -54,6 +69,13 @@ export class CommandesController {
   @Patch('details/:id/statut')
   updateDetailStatut(@Param('id') id: string, @Body() data: { statut: StatutPreparation }) {
     return this.commandesService.updateDetailStatut(+id, data.statut);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.CUISINE, Role.BAR)
+  @Post('tout-pret')
+  marquerToutPret(@Body() data: { tableId: number; destination: string }) {
+    return this.commandesService.marquerToutPret(data.tableId, data.destination);
   }
 
   @Get('session/:sessionId')
@@ -71,6 +93,11 @@ export class CommandesController {
   @Get('client-session/:sessionKey')
   findBySessionKey(@Param('sessionKey') sessionKey: string) {
     return this.commandesService.findBySessionKey(sessionKey);
+  }
+
+  @Get('table-public/:tableId')
+  findByTablePublic(@Param('tableId') tableId: string) {
+    return this.commandesService.findByTablePublic(+tableId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
