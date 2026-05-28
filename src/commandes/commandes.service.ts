@@ -179,7 +179,7 @@ export class CommandesService {
   async updateStatut(commandeId: number, statut: StatutCommande) {
     const commande = await this.prisma.commande.findUnique({
       where: { id: commandeId },
-      include: { table: true, serveur: true },
+      include: { table: { include: { restaurant: { select: { devise: true } } } }, serveur: true },
     });
 
     const updated = await this.prisma.commande.update({
@@ -220,7 +220,7 @@ export class CommandesService {
           statut, label, serveurNom: commande.serveur?.nom, message,
         });
 
-      // Quand le serveur valide → notifier cuisine/bar en temps réel
+      // Quand le serveur valide → notifier cuisine/bar en temps reel
       if (statut === 'VALIDEE') {
         const cmd = await this.prisma.commande.findUnique({
           where: { id: commandeId },
@@ -233,8 +233,38 @@ export class CommandesService {
           const aBar = cmd.details.some((d: any) =>
             d.menu?.categorie?.destination === 'BAR',
           );
-          if (aCuisine) this.socketGateway.notifierCuisine(cmd);
-          if (aBar) this.socketGateway.notifierBar(cmd);
+
+          const devise = commande?.table?.restaurant?.devise || '€';
+          const total = Number(cmd.montantTotal).toFixed(2);
+
+          if (aCuisine) {
+            this.socketGateway.notifierCuisine(cmd);
+            // Notifier tous les utilisateurs cuisine du restaurant
+            const cuisineUsers = await this.prisma.utilisateur.findMany({
+              where: { restaurantId: commande.table.restaurantId, role: 'CUISINE', statut: 'ACTIF' },
+              select: { id: true },
+            });
+            for (const u of cuisineUsers) {
+              await this.notificationsService.create(
+                u.id,
+                `🍳 Nouvelle commande cuisine — Table ${cmd.table.numero} — ${total} ${devise}`,
+              );
+            }
+          }
+          if (aBar) {
+            this.socketGateway.notifierBar(cmd);
+            // Notifier tous les utilisateurs bar du restaurant
+            const barUsers = await this.prisma.utilisateur.findMany({
+              where: { restaurantId: commande.table.restaurantId, role: 'BAR', statut: 'ACTIF' },
+              select: { id: true },
+            });
+            for (const u of barUsers) {
+              await this.notificationsService.create(
+                u.id,
+                `🍹 Nouvelle commande bar — Table ${cmd.table.numero} — ${total} ${devise}`,
+              );
+            }
+          }
         }
       }
     }
