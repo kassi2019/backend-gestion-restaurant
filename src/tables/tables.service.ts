@@ -63,13 +63,26 @@ export class TablesService {
   }
 
   async create(data: { numero: string; zone: string; restaurantId: number }) {
-    return this.prisma.tableRestaurant.create({
-      data: {
-        numero: data.numero,
-        zone: data.zone,
-        restaurantId: data.restaurantId,
-        qrCode: `QR-${data.restaurantId}-${data.numero}-${Date.now()}`,
-      },
+    // Transaction : créer puis mettre à jour le QR code avec l'ID généré
+    return this.prisma.$transaction(async (tx) => {
+      const table = await tx.tableRestaurant.create({
+        data: {
+          numero: data.numero,
+          zone: data.zone,
+          restaurantId: data.restaurantId,
+          qrCode: '',
+        },
+      });
+
+      const ip = (process.env.ADRESSE_IP || 'localhost').replace(/^https?:\/\//, '');
+      const port = process.env.PORT || '3000';
+      const host = ip === '0.0.0.0' ? 'localhost' : ip;
+      const qrUrl = `http://${host}:${port}/client.html?tableId=${table.id}&restaurantId=${data.restaurantId}`;
+
+      return tx.tableRestaurant.update({
+        where: { id: table.id },
+        data: { qrCode: qrUrl },
+      });
     });
   }
 
@@ -111,14 +124,23 @@ export class TablesService {
   async getQrCode(tableId: number) {
     const table = await this.prisma.tableRestaurant.findUnique({
       where: { id: tableId },
-      select: { id: true, numero: true, qrCode: true, restaurantId: true },
+      select: { id: true, numero: true, restaurantId: true },
     });
     if (!table) throw new Error('Table introuvable');
+
+    const ip = (process.env.ADRESSE_IP || 'localhost').replace(
+      /^https?:\/\//,
+      '',
+    );
+    const port = process.env.PORT || '3000';
+    const host = ip === '0.0.0.0' ? 'localhost' : ip;
+    const baseUrl = `http://${host}:${port}`;
+
     return {
       tableId: table.id,
       numero: table.numero,
-      qrCode: table.qrCode,
-      qrUrl: `/client.html?tableId=${table.id}&restaurantId=${table.restaurantId}`,
+      qrCode: `${baseUrl}/client.html?tableId=${table.id}&restaurantId=${table.restaurantId}`,
+      qrUrl: `/qr-table-${table.id}.png`,
     };
   }
 }

@@ -95,6 +95,12 @@ export class CommandesController {
     return this.commandesService.findBySessionKey(sessionKey);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('recherche/:term')
+  rechercher(@Param('term') term: string) {
+    return this.commandesService.rechercherParNumero(term);
+  }
+
   @Get('table-public/:tableId')
   findByTablePublic(@Param('tableId') tableId: string) {
     return this.commandesService.findByTablePublic(+tableId);

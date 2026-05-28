@@ -163,11 +163,17 @@ model Commande {
   caissierId      Int?              @map("caissier_id")
   caissier        Utilisateur?      @relation("CaissierPaiements", fields: [caissierId], references: [id])
   clientRef       String?           @map("client_ref") @db.VarChar(20)
+  typeCommande    TypeCommande      @default(SUR_PLACE) @map("type_commande")
 
   details         CommandeDetail[]
   factures        Facture[]
 
   @@map("commandes")
+}
+
+enum TypeCommande {
+  SUR_PLACE
+  A_EMPORTER
 }
 
 enum StatutCommande {

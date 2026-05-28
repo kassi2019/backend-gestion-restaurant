@@ -20,12 +20,14 @@ export class CommandesService {
   }) {
     const table = await this.prisma.tableRestaurant.findUnique({
       where: { id: data.tableId },
-      include: { restaurant: { select: { devise: true } } },
+      include: { restaurant: { select: { devise: true, id: true } } },
     });
 
     if (!table) {
       throw new Error('Table introuvable');
     }
+
+    const isComptoir = table.zone?.toUpperCase() === 'COMPTOIR' || table.numero.toUpperCase() === 'T00' || table.numero.toUpperCase() === 'COMPTOIR';
 
     // Auto-create or find session
     let session;
@@ -35,7 +37,8 @@ export class CommandesService {
       });
     }
     if (!session) {
-      const key = `TB${data.tableId}-${Date.now().toString(36).toUpperCase()}`;
+      const prefix = isComptoir ? 'CPT' : `TB${data.tableId}`;
+      const key = `${prefix}-${Date.now().toString(36).toUpperCase()}`;
       session = await this.prisma.sessionClient.create({
         data: {
           sessionKey: key,
@@ -63,38 +66,99 @@ export class CommandesService {
       }
     }
 
+    const typeCommande = isComptoir ? 'A_EMPORTER' : 'SUR_PLACE';
+    const statutInitial = isComptoir ? 'VALIDEE' : 'EN_ATTENTE';
+
     const commande = await this.prisma.commande.create({
       data: {
         tableId: data.tableId,
-        serveurId: table.serveurId,
+        serveurId: table.serveurId || null,
         sessionId: session.id,
         clientRef: data.clientRef || null,
         montantTotal,
+        typeCommande: typeCommande as any,
+        statut: statutInitial as any,
         details: {
           create: detailsData,
         },
       },
       include: {
         details: {
-          include: { menu: true },
+          include: { menu: { include: { categorie: true } } },
         },
         table: true,
         session: true,
       },
     });
 
-    // La table sera passée à OCCUPEE lors de la validation par le serveur
+    const devise = table.restaurant?.devise || '€';
+    const numeroCommande = `CMD-${String(commande.id).padStart(4, '0')}`;
 
-    // Notification socket : serveur assigné + admins/managers
-    const label = `Nouvelle commande sur table ${table.numero} — ${Number(commande.montantTotal).toFixed(2)} ${table.restaurant?.devise || '€'}`;
-    if (table.serveurId) {
-      this.socketGateway.notifierNouvelleCommande(table.serveurId, commande);
-      await this.notificationsService.create(table.serveurId, label);
+    // Si comptoir → notifier directement la cuisine/bar (pas de serveur)
+    if (isComptoir) {
+      // Table comptoir → OCCUPEE
+      await this.prisma.tableRestaurant.update({
+        where: { id: table.id },
+        data: { statut: 'OCCUPEE' },
+      });
+
+      // Notifier cuisine et bar directement
+      const aCuisine = commande.details.some((d: any) =>
+        ['CUISINE', 'DESSERT'].includes(d.menu?.categorie?.destination),
+      );
+      const aBar = commande.details.some((d: any) =>
+        d.menu?.categorie?.destination === 'BAR',
+      );
+
+      const total = Number(commande.montantTotal).toFixed(2);
+
+      if (aCuisine) {
+        this.socketGateway.notifierCuisine(commande);
+        const cuisineUsers = await this.prisma.utilisateur.findMany({
+          where: { restaurantId: table.restaurantId, role: 'CUISINE', statut: 'ACTIF' },
+          select: { id: true },
+        });
+        for (const u of cuisineUsers) {
+          await this.notificationsService.create(
+            u.id,
+            `🍳 ${numeroCommande} — Nouvelle commande comptoir — ${total} ${devise}`,
+          );
+        }
+      }
+      if (aBar) {
+        this.socketGateway.notifierBar(commande);
+        const barUsers = await this.prisma.utilisateur.findMany({
+          where: { restaurantId: table.restaurantId, role: 'BAR', statut: 'ACTIF' },
+          select: { id: true },
+        });
+        for (const u of barUsers) {
+          await this.notificationsService.create(
+            u.id,
+            `🍹 ${numeroCommande} — Nouvelle commande comptoir — ${total} ${devise}`,
+          );
+        }
+      }
+
+      // Notifier admins/caissiers
+      this.socketGateway.server.to('admin').emit('nouvelle_commande', {
+        ...commande,
+        numeroCommande,
+      });
+    } else {
+      // Sur place : comportement normal
+      const label = `Nouvelle commande sur table ${table.numero} — ${Number(commande.montantTotal).toFixed(2)} ${devise}`;
+      if (table.serveurId) {
+        this.socketGateway.notifierNouvelleCommande(table.serveurId, commande);
+        await this.notificationsService.create(table.serveurId, label);
+      }
+      this.socketGateway.server.to('admin').emit('nouvelle_commande', commande);
     }
-    // Toujours notifier les admins/managers
-    this.socketGateway.server.to('admin').emit('nouvelle_commande', commande);
 
-    return commande;
+    return {
+      ...commande,
+      numeroCommande,
+      isComptoir,
+    };
   }
 
   async findAllByRestaurant(restaurantId: number) {
@@ -306,6 +370,14 @@ export class CommandesService {
       await this.notificationsService.create(cmd.serveurId, label);
     }
 
+    // Si la commande est VALIDEE, la passer en EN_PREPARATION (on commence à préparer)
+    if (statut === 'PRET' && cmd.statut === 'VALIDEE') {
+      await this.prisma.commande.update({
+        where: { id: cmd.id },
+        data: { statut: 'EN_PREPARATION' },
+      });
+    }
+
     // Vérifier si TOUS les détails de la commande sont PRET
     if (statut === 'PRET') {
       const tousPrets = await this.prisma.commandeDetail.count({
@@ -374,12 +446,21 @@ export class CommandesService {
       });
       nbMisAJour += detailIds.length;
 
-      // Vérifier si TOUS les détails de la commande sont PRET maintenant
+      // Si la commande est VALIDEE, la passer en EN_PREPARATION
+      if (cmd.statut === 'VALIDEE') {
+        await this.prisma.commande.update({
+          where: { id: cmd.id },
+          data: { statut: 'EN_PREPARATION' },
+        });
+      }
+
+      // Vérifier si TOUS les détails (CUISINE + BAR) sont PRET maintenant
       const nonPrets = await this.prisma.commandeDetail.count({
         where: { commandeId: cmd.id, statutPreparation: { not: 'PRET' } },
       });
 
-      if (nonPrets === 0 && cmd.statut === 'EN_PREPARATION') {
+      if (nonPrets === 0) {
+        // Marquer la commande entière comme PRETE
         await this.prisma.commande.update({
           where: { id: cmd.id },
           data: { statut: 'PRETE' },
@@ -410,6 +491,33 @@ export class CommandesService {
     };
   }
 
+  async rechercherParNumero(term: string) {
+    // Recherche par CMD-XXXX (extrait l'ID) ou par numéro exact
+    const idMatch = term.match(/CMD-?(\d+)/i);
+    const commandeId = idMatch ? parseInt(idMatch[1]) : parseInt(term);
+
+    if (isNaN(commandeId)) return [];
+
+    const commandes = await this.prisma.commande.findMany({
+      where: {
+        id: commandeId,
+        statut: { not: 'PAYEE' }, // Ne pas retourner les commandes déjà payées
+      },
+      include: {
+        details: { include: { menu: true } },
+        table: { select: { numero: true, id: true } },
+        session: { select: { sessionKey: true, dateArrivee: true } },
+        serveur: { select: { id: true, nom: true } },
+        factures: { select: { id: true, numero: true } },
+      },
+    });
+
+    return commandes.map((cmd) => ({
+      ...cmd,
+      numeroCommande: `CMD-${String(cmd.id).padStart(4, '0')}`,
+    }));
+  }
+
   async findBySession(sessionId: number) {
     return this.prisma.commande.findMany({
       where: { sessionId },
@@ -425,7 +533,7 @@ export class CommandesService {
       where: { sessionKey },
     });
     if (!session) return [];
-    return this.prisma.commande.findMany({
+    const commandes = await this.prisma.commande.findMany({
       where: { sessionId: session.id },
       include: {
         details: { include: { menu: true } },
@@ -434,6 +542,13 @@ export class CommandesService {
       },
       orderBy: { dateCommande: 'desc' },
     });
+
+    // Ajouter le numeroCommande pour les commandes à emporter
+    return commandes.map((cmd) => ({
+      ...cmd,
+      typeCommande: cmd.typeCommande,
+      numeroCommande: `CMD-${String(cmd.id).padStart(4, '0')}`,
+    }));
   }
 
   async findByTablePublic(tableId: number) {
@@ -442,7 +557,7 @@ export class CommandesService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    return this.prisma.commande.findMany({
+    const commandes = await this.prisma.commande.findMany({
       where: {
         tableId,
         statut: { notIn: ['PAYEE', 'ANNULEE'] as any },
@@ -456,6 +571,12 @@ export class CommandesService {
       },
       orderBy: { dateCommande: 'desc' },
     });
+
+    return commandes.map((cmd) => ({
+      ...cmd,
+      typeCommande: cmd.typeCommande,
+      numeroCommande: `CMD-${String(cmd.id).padStart(4, '0')}`,
+    }));
   }
 
   async annulerFromClient(commandeId: number, sessionKey: string) {

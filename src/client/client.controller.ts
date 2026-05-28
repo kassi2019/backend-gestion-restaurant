@@ -1,11 +1,22 @@
-import { Controller, Get, Param, Res, NotFoundException, Query } from '@nestjs/common';
-import { Response } from 'express';
+import { Controller, Get, Param, Res, Req, NotFoundException, Query } from '@nestjs/common';
+import { Response, Request } from 'express';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 
 const PUBLIC_DIR = join(__dirname, '..', '..', 'public');
+
+function getBaseUrl(req: Request): string {
+  const ip = (process.env.ADRESSE_IP || 'localhost').replace(/^https?:\/\//, '');
+  if (ip === '0.0.0.0') {
+    // Utiliser le host de la requête si l'IP est 0.0.0.0
+    return `${req.protocol}://${req.get('host')}`;
+  }
+  const port = process.env.PORT || '3000';
+  const host = ip === 'localhost' || ip === '127.0.0.1' ? `localhost:${port}` : `${ip}:${port}`;
+  return `http://${host}`;
+}
 
 @Controller()
 export class ClientController {
@@ -19,12 +30,14 @@ export class ClientController {
   }
 
   @Get(['qrcodes', 'qrcodes.html'])
-  async getQrCodes(@Res() res: Response, @Query('restaurantId') restaurantId?: string) {
+  async getQrCodes(@Res() res: Response, @Req() req: Request, @Query('restaurantId') restaurantId?: string) {
     const tables = await this.prisma.tableRestaurant.findMany({
       where: restaurantId ? { restaurantId: parseInt(restaurantId) } : {},
       select: { id: true, numero: true, zone: true, restaurantId: true },
       orderBy: { numero: 'asc' },
     });
+
+    const baseUrl = getBaseUrl(req);
 
     const cards = tables
       .map(
@@ -47,7 +60,7 @@ export class ClientController {
   }
 
   @Get('qr-table-:id.png')
-  async getQrImage(@Param('id') id: string, @Res() res: Response) {
+  async getQrImage(@Param('id') id: string, @Res() res: Response, @Req() req: Request) {
     const tableId = parseInt(id);
     if (isNaN(tableId)) throw new NotFoundException('ID table invalide');
 
@@ -57,7 +70,8 @@ export class ClientController {
     });
     if (!table) throw new NotFoundException('Table introuvable');
 
-    const url = `/client.html?tableId=${table.id}&restaurantId=${table.restaurantId}`;
+    const baseUrl = getBaseUrl(req);
+    const url = `${baseUrl}/client.html?tableId=${table.id}&restaurantId=${table.restaurantId}`;
     const pngBuffer = await QRCode.toBuffer(url, { width: 300, margin: 2 });
 
     res.setHeader('Content-Type', 'image/png');

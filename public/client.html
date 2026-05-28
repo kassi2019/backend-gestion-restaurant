@@ -104,10 +104,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <div class="modal">
     <div class="success-card">
       <div class="check">✅</div>
-      <h2>Commande envoyée !</h2>
+      <h2 id="successTitle">Commande envoyée !</h2>
       <p>Votre commande a été transmise au serveur.</p>
       <div class="amount" id="successAmount"></div>
-      <p>Le serveur va valider votre commande.</p>
+      <div id="successNumeroCmd" style="display:none;margin:12px 0">
+        <p style="font-size:13px;color:#666">Votre numéro de commande</p>
+        <p style="font-size:32px;font-weight:900;color:#E86B2A;letter-spacing:2px" id="successNumeroCmdValue">CMD-0001</p>
+        <p style="font-size:12px;color:#999;margin-top:4px">Gardez ce numéro pour le retrait</p>
+      </div>
+      <p id="successSubtitle">Le serveur va valider votre commande.</p>
       <p class="hint" id="successHint"></p>
       <button class="order-btn" style="margin-top:16px;width:100%" onclick="newOrder()">🛒 Commander autre chose</button>
       <button class="invoice-btn" style="width:100%;padding:12px;margin-top:8px;display:none" id="successInvoiceBtn" onclick="demanderFacture()">🧾 Demander l'addition</button>
@@ -398,9 +403,21 @@ async function submitOrder() {
       closeCart();
       const total = cart.reduce((s, c) => s + c.prix * c.quantite, 0);
       document.getElementById('successAmount').textContent = formatPrix(total);
-      document.getElementById('successHint').textContent = commandesCount > 1
-        ? 'Commande #' + commandesCount + ' de ' + clientId + ' sur table ' + tableId
-        : 'D\'autres personnes à votre table peuvent aussi scanner le QR code !';
+
+      if (data.isComptoir) {
+        // Commande à emporter : afficher le numéro unique
+        document.getElementById('successTitle').textContent = 'Commande à emporter !';
+        document.getElementById('successHint').textContent = 'Présentez ce numéro à la caisse pour retirer votre commande.';
+        document.getElementById('successNumeroCmd').style.display = 'block'; document.getElementById('successSubtitle').textContent = 'Votre commande est transmise directement en cuisine.';
+        document.getElementById('successNumeroCmdValue').textContent = data.numeroCommande || ('CMD-' + String(data.id).padStart(4, '0'));
+        document.getElementById('successInvoiceBtn').style.display = 'none';
+      } else {
+        document.getElementById('successTitle').textContent = 'Commande envoyée !';
+        document.getElementById('successHint').textContent = commandesCount > 1
+          ? 'Commande #' + commandesCount + ' de ' + clientId + ' sur table ' + tableId
+          : 'D\'autres personnes à votre table peuvent aussi scanner le QR code !';
+        document.getElementById('successNumeroCmd').style.display = 'none'; document.getElementById('successSubtitle').textContent = 'Le serveur va valider votre commande.';
+      }
       document.getElementById('successModal').classList.add('show');
       cart = [];
       updateCartBar();
@@ -441,10 +458,12 @@ async function viewMyOrders() {
     let grandTotal = 0;
     updateInvoiceButton(commandes); document.getElementById('historyContent').innerHTML = commandes.map((cmd, i) => {
       grandTotal += Number(cmd.montantTotal);
+      var isComptoir = cmd.typeCommande === 'A_EMPORTER' || cmd.numeroCommande;
       return `
       <div style="background:#f9f9f9;border-radius:12px;padding:12px;margin-bottom:10px">
+        ${isComptoir ? '<div style="background:#E86B2A;color:white;padding:8px 12px;border-radius:8px;margin-bottom:8px;text-align:center"><span style="font-size:11px;opacity:0.8">Votre numéro</span><br><span style="font-size:22px;font-weight:900;letter-spacing:2px">' + (cmd.numeroCommande || 'CMD-' + String(cmd.id).padStart(4, '0')) + '</span><br><span style="font-size:10px;opacity:0.7">Présentez ce numéro à la caisse</span></div>' : ''}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <strong>Commande #${commandes.length - i}</strong>
+          <strong>${isComptoir ? '📦 À emporter' : 'Commande #' + (commandes.length - i)}</strong>
           <span style="font-size:12px;padding:4px 8px;border-radius:10px;background:${cmd.statut === 'EN_ATTENTE' ? '#FFF3E0' : cmd.statut === 'VALIDEE' ? '#E8F5E9' : cmd.statut === 'EN_PREPARATION' ? '#FFF8E1' : cmd.statut === 'PRETE' ? '#E3F2FD' : cmd.statut === 'SERVIE' ? '#F3E5F5' : '#EEE'};color:${cmd.statut === 'EN_ATTENTE' ? '#E65100' : cmd.statut === 'VALIDEE' ? '#2E7D32' : '#333'}">
             ${cmd.statut === 'EN_ATTENTE' ? 'En attente' : cmd.statut === 'VALIDEE' ? 'Validée' : cmd.statut === 'EN_PREPARATION' ? 'En préparation' : cmd.statut === 'PRETE' ? 'Prête' : cmd.statut === 'SERVIE' ? 'Servie' : cmd.statut}
           </span>

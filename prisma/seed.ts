@@ -116,6 +116,16 @@ async function main() {
   console.log('Menus créés:', menusData.length);
 
   // Create tables
+  // Table comptoir (T00) — pour les commandes à emporter
+  await prisma.tableRestaurant.create({
+    data: {
+      numero: 'T00',
+      zone: 'Comptoir',
+      restaurantId: restaurant.id,
+      qrCode: `QR-${restaurant.id}-T00-${Date.now()}`,
+    },
+  });
+
   const zones = ['Terrasse', 'Intérieur', 'VIP'];
   for (let i = 1; i <= 10; i++) {
     await prisma.tableRestaurant.create({

@@ -55,14 +55,8 @@ export class AuthService {
       },
     });
 
-    const rolesSansPlanning = [
-      'ADMIN',
-      'MANAGER',
-      'CUISINE',
-      'BAR',
-      'CAISSIER',
-    ];
-    if (!planning && !rolesSansPlanning.includes(user.role)) {
+    // Tous les rôles doivent avoir un planning aujourd'hui
+    if (!planning) {
       throw new UnauthorizedException(
         "Aucun service programmé aujourd'hui. Connexion refusée.",
       );

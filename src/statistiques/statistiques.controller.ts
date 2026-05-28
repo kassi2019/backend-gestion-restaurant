@@ -12,27 +12,48 @@ export class StatistiquesController {
   constructor(private statistiquesService: StatistiquesService) {}
 
   @Get('dashboard')
-  getDashboard(@Request() req) {
-    return this.statistiquesService.getDashboard(req.user.restaurantId);
+  getDashboard(
+    @Request() req,
+    @Query('debut') debut?: string,
+    @Query('fin') fin?: string,
+  ) {
+    return this.statistiquesService.getDashboard(req.user.restaurantId, debut, fin);
   }
 
   @Get('ventes')
-  getVentes(@Request() req, @Query('debut') debut?: string, @Query('fin') fin?: string) {
+  getVentes(
+    @Request() req,
+    @Query('debut') debut?: string,
+    @Query('fin') fin?: string,
+  ) {
     return this.statistiquesService.getVentes(req.user.restaurantId, debut, fin);
   }
 
   @Get('plats-populaires')
-  getPlatsPopulaires(@Request() req, @Query('limit') limit?: string) {
-    return this.statistiquesService.getPlatsPopulaires(req.user.restaurantId, limit ? +limit : 10);
+  getPlatsPopulaires(
+    @Request() req,
+    @Query('limit') limit?: string,
+    @Query('debut') debut?: string,
+    @Query('fin') fin?: string,
+  ) {
+    return this.statistiquesService.getPlatsPopulaires(req.user.restaurantId, limit ? +limit : 10, debut, fin);
   }
 
   @Get('performance-serveurs')
-  getPerformanceServeurs(@Request() req) {
-    return this.statistiquesService.getPerformanceServeurs(req.user.restaurantId);
+  getPerformanceServeurs(
+    @Request() req,
+    @Query('debut') debut?: string,
+    @Query('fin') fin?: string,
+  ) {
+    return this.statistiquesService.getPerformanceServeurs(req.user.restaurantId, debut, fin);
   }
 
   @Get('affluence')
-  getAffluence(@Request() req) {
-    return this.statistiquesService.getAffluence(req.user.restaurantId);
+  getAffluence(
+    @Request() req,
+    @Query('debut') debut?: string,
+    @Query('fin') fin?: string,
+  ) {
+    return this.statistiquesService.getAffluence(req.user.restaurantId, debut, fin);
   }
 }
