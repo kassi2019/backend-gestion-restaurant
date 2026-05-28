@@ -110,7 +110,19 @@ Toutes les routes sont préfixées par `/api` sauf les routes client (`/client`,
 | Statistiques    | `/api/statistiques` | ADMIN, MANAGER               |
 | Client          | `/client`, `/qrcodes` | Public                    |
 
+## Fonctionnalités principales
+
+- **QR Code** : chaque table a son QR code, scan → menu → commande
+- **Temps réel** : Socket.IO avec toasts 3D et sonnerie de notification
+- **Dashboard cuisine/bar** : FIFO avec timer, code couleur, "Tout prêt" par table
+- **Double suivi** : statut commande + statut par article, transition auto PRETE
+- **Restauration session client** : localStorage + fallback table, anti-fraîcheur 6h
+- **Annulation client** : article ou commande entière tant que EN_ATTENTE
+- **Demande d'addition** : bouton client visible quand SERVIE
+- **Rôles** : Admin, Manager, Serveur, Cuisine, Bar, Caissier
+- **Planning** : affectation automatique quotidienne des tables
+
 ## Documentation
 
 - [DOCUMENTATION.md](./DOCUMENTATION.md) — Parcours fonctionnel complet
-- [Cahier_Des_Charges_Restaurant_QRCode_v2.md](./Cahier_Des_Charges_Restaurant_QRCode_v2.md) — Spécifications techniques
+- [Cahier_Des_Charges_Restaurant_QRCode_v2.md](./Cahier_Des_Charges_Restaurant_QRCode_v2.md) — Spécifications techniques v3.0

@@ -22,15 +22,20 @@ http://<IP_DU_SERVEUR>:3000/client.html?tableId=3&restaurantId=1
 
 ### 1.2 Plusieurs personnes à la même table
 
-Chaque personne qui scanne le QR code reçoit un `clientRef` unique (ex: `CLI-A7B2`, `CLI-X9K1`), généré côté client (mobile/web). Le backend génère également une `sessionKey` unique (format `TB{idTable}-{timestamp}`).
+Chaque personne qui scanne le QR code reçoit un `clientRef` unique (ex: `CLI-A7B2`). Le backend génère une `sessionKey` unique (format `TB{idTable}-{timestamp}`).
 
-> **Exemple** : Table 5, 4 personnes. Chacune scanne le QR code.
-> - Personne 1 → clientRef CLI-A7B2
-> - Personne 2 → clientRef CLI-B3M8
-> - Personne 3 → clientRef CLI-K2P4
-> - Personne 4 → clientRef CLI-Z1W6
->
-> Elles commandent **indépendamment** mais tout est lié à la **Table 5**.
+### 1.3 Restauration de session
+
+Si le client ferme son navigateur et rescanne le QR code :
+
+1. **localStorage** : la `sessionKey` est sauvegardée dans le navigateur. Si elle existe encore et que la session a moins de **6 heures**, les commandes sont restaurées automatiquement.
+2. **Fallback table** : si pas de session en localStorage, le système recherche les commandes actives (non payées, non annulées) de la table dont la **session a commencé aujourd'hui**.
+3. **Nettoyage auto** : si toutes les commandes sont payées, le localStorage est vidé.
+
+> **Scénarios gérés** :
+> - Même visite passant minuit (23:50 → 00:05) : session < 6h → restaurée
+> - Même téléphone le lendemain : session > 6h → nettoyée, nouveau départ
+> - Nouveau client aujourd'hui sur table hier occupée : la session d'hier est ignorée
 
 ---
 
@@ -38,19 +43,9 @@ Chaque personne qui scanne le QR code reçoit un `clientRef` unique (ex: `CLI-A7
 
 ### 2.1 Le client compose sa commande
 
-Le client :
-1. Parcourt les catégories (Entrées, Plats, Boissons...)
-2. Appuie sur **+** pour ajouter un plat
-3. Le panier se remplit en bas de l'écran
-
-> **Exemple** : CLI-A7B2 commande :
-> - 2x Poulet DG (15.00 € = 30.00 €)
-> - 1x Jus d'orange (5.00 € = 5.00 €)
-> - **Total panier : 35.00 €**
+Le client parcourt les catégories, ajoute des articles au panier.
 
 ### 2.2 Le client confirme
-
-Le client appuie sur **Commander** puis **Confirmer la commande**.
 
 **Endpoint** : `POST /api/commandes/client`
 
@@ -67,20 +62,21 @@ Le client appuie sur **Commander** puis **Confirmer la commande**.
 ```
 
 **Ce qui se passe côté backend :**
-1. Une **session** est créée (ou réutilisée via `sessionKey`) pour cette table
+1. Une session est créée (ou réutilisée via `sessionKey`)
 2. La commande est créée avec le statut **EN_ATTENTE**
-3. Une notification temps réel est envoyée au **serveur** assigné à cette table
-4. Si les articles contiennent des plats CUISINE/DESSERT → notification à l'écran **Cuisine**
-5. Si les articles contiennent des boissons BAR → notification à l'écran **Bar**
-6. Une notification est sauvegardée en base de données
+3. Une notification temps réel est envoyée au **serveur** assigné
+4. Si CUISINE/DESSERT → notification **Cuisine**
+5. Si BAR → notification **Bar**
+6. Notification sauvegardée en base
 
-**Ce que voit le client :**
-```
-Commande envoyée !
-Votre commande a été transmise au serveur.
-35.00 €
-Le serveur va valider votre commande.
-```
+### 2.3 Le client peut annuler ou modifier
+
+Tant que la commande est **EN_ATTENTE** (serveur pas encore validé) :
+- **✕ sur un article** : retire un article spécifique (`POST /api/commandes/client-annuler-detail`)
+- **✕ Annuler** : annule toute la commande (`POST /api/commandes/client-annuler`)
+- Si le dernier article est retiré → la commande passe automatiquement en ANNULEE
+
+Une fois validée par le serveur, **plus aucune modification possible** par le client.
 
 ---
 
@@ -88,399 +84,251 @@ Le serveur va valider votre commande.
 
 ### 3.1 Le serveur voit les commandes en attente
 
-Le serveur ouvre l'onglet **Commandes** sur son téléphone/tablette.
-
-**Endpoint** : `GET /api/commandes/serveur` — Renvoie uniquement les commandes du serveur connecté.
+**Endpoint** : `GET /api/commandes/serveur` — renvoie uniquement les commandes du serveur connecté.
 
 ### 3.2 Le serveur valide la commande
-
-Le serveur appuie sur **Valider**.
 
 **Endpoint** : `PATCH /api/commandes/:id/statut` avec `{ "statut": "VALIDEE" }`
 
 **Ce qui se passe :**
-1. La commande passe de `EN_ATTENTE` → `VALIDEE`
-2. **La table passe automatiquement à OCCUPEE** (si elle ne l'était pas déjà)
-3. Un toast temps réel s'affiche pour le serveur et les admins
-4. Les notifications cuisine/bar sont déclenchées selon le contenu de la commande
+1. Commande `EN_ATTENTE` → `VALIDEE`
+2. **Table → OCCUPEE**
+3. Notifications cuisine/bar déclenchées selon le contenu
+
+**Après validation, le serveur n'a plus d'action** jusqu'à ce que la commande soit `PRETE`.
 
 ### 3.3 Le cycle de vie de la commande
 
 ```
-EN_ATTENTE  →  Le client a envoyé sa commande
+EN_ATTENTE     → Client a envoyé, peut encore annuler
     │
-    ▼ [Serveur : Valider]
-VALIDEE     →  Le serveur a confirmé, la table → OCCUPEE
+    ▼ [Serveur : ✓ Valider]
+VALIDEE        → Serveur a confirmé, table → OCCUPEE
     │
-    ▼ [Cuisine : En préparation]
-EN_PREPARATION → Les cuisiniers préparent
+    ▼ [Cuisine/Bar : 👨‍🍳 En préparation]
+EN_PREPARATION → En cours de préparation
     │
-    ▼ [Cuisine : Prête]
-PRETE       →  Le plat est prêt à être servi
+    ▼ [Cuisine/Bar : ✅ Prêt sur chaque article]
+PRETE          → Tous les articles sont prêts (automatique)
     │
-    ▼ [Serveur : Servie]
-SERVIE      →  Le plat est servi au client
+    ▼ [Serveur : 🍽 Servie]
+SERVIE         → Servi au client, bouton "Demander l'addition" visible
     │
-    ▼ [Caissier : Payer]
-PAYEE       →  Le client a payé
+    ▼ [Caissier : 💰 Payer]
+PAYEE          → Payé, table → LIBRE (si plus aucune commande active)
 
-ANNULEE     →  Commande annulée (possible depuis la validation)
+ANNULEE        → Annulée (client avant validation, ou admin)
 ```
 
-**Actions disponibles selon le statut :**
+### 3.4 Statuts de préparation par article
 
-| Statut | Qui peut agir | Endpoint |
-|---|---|---|
-| EN_ATTENTE | Serveur | `PATCH /api/commandes/:id/statut` → VALIDEE |
-| VALIDEE | Cuisine, Bar | `PATCH /api/commandes/:id/statut` → EN_PREPARATION |
-| EN_PREPARATION | Cuisine | `PATCH /api/commandes/details/:id/statut` → PRET |
-| PRETE | Serveur | `PATCH /api/commandes/:id/statut` → SERVIE |
-| SERVIE | Caissier | `POST /api/paiements/payer/:commandeId` → PAYEE |
+Chaque article a son propre suivi :
+- **EN_PREPARATION** (défaut)
+- **PRET** (marqué par cuisine/bar)
 
-### 3.4 Statut des détails de commande
-
-Chaque ligne de commande (`CommandeDetail`) a son propre suivi de préparation :
-
-| Statut | Description |
-|---|---|
-| EN_PREPARATION | Par défaut à la création |
-| PRET | Le plat/boisson est prêt |
-
-**Endpoint dédié** : `PATCH /api/commandes/details/:id/statut` avec `{ "statut": "PRET" }`
-Accessible aux rôles CUISINE et BAR pour gérer la préparation article par article.
+Quand **tous** les articles d'une commande sont PRET → la commande passe automatiquement à `PRETE`.
 
 ---
 
 ## 4. TRAITEMENT PAR LA CUISINE ET LE BAR
 
-### 4.1 La cuisine reçoit les commandes en temps réel
+### 4.1 Dashboard dédié
 
-Quand un client passe commande avec des plats de destination **CUISINE** ou **DESSERT**, un toast s'affiche immédiatement sur l'écran cuisine.
+La cuisine et le bar ont chacun un **dashboard dédié** avec :
 
-**Endpoint** : `GET /api/commandes/cuisine` — Filtré automatiquement : plats CUISINE + DESSERT, exclut EN_ATTENTE/ANNULEE/PAYEE/SERVIE.
+| Fonctionnalité | Description |
+|---|---|
+| **Stats** | À préparer / En cours / Prêtes |
+| **Tri FIFO** | Les commandes les plus anciennes en haut |
+| **⏱ Timer** | Minutes écoulées depuis la commande |
+| **Code couleur** | 🔴 >15 min (urgent) / 🟡 5-15 min / 🟢 <5 min |
+| **Articles détaillés** | Chaque article avec son statut |
+| **Temps réel** | Nouvelles commandes = apparition instantanée |
 
-### 4.2 Le cuisinier change le statut
+### 4.2 Actions disponibles
 
-Le cuisinier peut :
-1. Passer la commande entière en `EN_PREPARATION` : `PATCH /api/commandes/:id/statut`
-2. Passer un détail spécifique en `PRET` : `PATCH /api/commandes/details/:id/statut`
+| Qui | Bouton | Effet |
+|---|---|---|
+| Cuisine | **👨‍🍳 En préparation** | VALIDEE → EN_PREPARATION |
+| Cuisine | **✅ Prêt** (par article) | Article → PRET |
+| Cuisine | **✅ Tout prêt** (par table) | Tous les articles cuisine de la table → PRET |
+| Bar | **👨‍🍳 En préparation** | VALIDEE → EN_PREPARATION |
+| Bar | **✅ Prêt** (par article) | Article → PRET |
+| Bar | **✅ Tout prêt** (par table) | Tous les articles bar de la table → PRET |
 
-### 4.3 Le bar fonctionne de la même façon
+### 4.3 Passage automatique à PRETE
 
-**Endpoint** : `GET /api/commandes/bar` — Filtré automatiquement : boissons BAR uniquement.
+Quand le **dernier article** (cuisine + bar) passe à PRET → la commande passe automatiquement à `PRETE` → le serveur est notifié.
+
+### 4.4 Montants par acteur
+
+Chaque acteur voit uniquement le **total de ses articles** :
+- **Cuisine** : total des articles CUISINE + DESSERT uniquement
+- **Bar** : total des articles BAR uniquement
+- Le montant global de la commande reste visible par le caissier et l'admin
 
 ---
 
 ## 5. PAIEMENT PAR LE CAISSIER
 
-### 5.1 Le caissier voit les commandes à payer
+### 5.1 Commandes à payer
 
-**Endpoint** : `GET /api/paiements/a-payer` — Commandes SERVIE non encore payées.
+**Endpoint** : `GET /api/paiements/a-payer` — commandes SERVIE non payées.
 
-### 5.2 Le caissier encaisse
+### 5.2 Paiement
 
 **Endpoint** : `POST /api/paiements/payer/:commandeId` avec `{ "mode": "ESPECES" }`
 
-**Ce qui se passe :**
-1. La commande passe à `PAYEE`
-2. Une **facture** est générée (ex: `FAC-20260528-0003`)
-3. **Vérification** : reste-t-il d'autres commandes non payées sur cette table ?
-   - **OUI** → la table reste `OCCUPEE`
-   - **NON** → la table passe à `LIBRE`
+1. Commande → `PAYEE`
+2. Facture générée (`FAC-AAAAMMJJ-XXXX`)
+3. Vérification : autres commandes non payées sur la table ?
+   - **NON** → table → `LIBRE` (les commandes EN_ATTENTE ne bloquent pas)
+4. Le reçu s'affiche avec possibilité d'**imprimer/télécharger**
 
-**Modes de paiement disponibles :**
-- `ESPECES`
-- `MOBILE_MONEY`
-- `CARTE_BANCAIRE`
-
-### 5.3 Factures
+### 5.3 Factures et historique
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/paiements/factures` | Liste des factures (filtrable par `?date=YYYY-MM-DD`) |
-| `GET /api/paiements/factures/:id` | Détail d'une facture |
-| `GET /api/paiements/factures/:id/imprimer` | Version HTML imprimable |
+| `GET /api/paiements/factures` | Liste des factures (filtrable par `?date=`) |
+| `GET /api/paiements/factures/:id` | Détail |
+| `GET /api/paiements/factures/:id/imprimer?token=` | Reçu HTML imprimable |
 
-### 5.4 Caisse journalière
+Dans le dashboard caissier, chaque facture de l'historique est **cliquable** (🖨) pour réimprimer le reçu.
+
+### 5.4 Caisse
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/paiements/caisse/jour` | Résumé des encaissements du jour par mode de paiement |
-| `POST /api/paiements/caisse/cloture` | Clôture de la caisse du jour |
+| `GET /api/paiements/caisse/jour` | Résumé du jour par mode de paiement |
+| `POST /api/paiements/caisse/cloture` | Clôture de caisse |
 
 ---
 
 ## 6. GESTION DES TABLES ET SERVEURS
 
-### 6.1 Affectation des tables aux serveurs
+### 6.1 Endpoints
 
-L'admin/manager peut affecter des tables aux serveurs.
+| Endpoint | Accès | Description |
+|---|---|---|
+| `GET /api/tables` | ADMIN, MANAGER, SERVEUR | Toutes les tables |
+| `GET /api/tables/serveur` | SERVEUR | Tables assignées |
+| `POST /api/tables` | ADMIN, MANAGER | Créer |
+| `PATCH /api/tables/:id/assign` | ADMIN, MANAGER | Assigner serveur |
+| `PATCH /api/tables/:id/statut` | ADMIN, MANAGER, SERVEUR | Changer statut |
+| `GET /api/tables/:id/qrcode` | JWT | Données QR code |
 
-| Endpoint | Description |
-|---|---|
-| `GET /api/serveur-tables` | Toutes les affectations |
-| `GET /api/serveur-tables/serveur` | Affectations du serveur connecté |
-| `GET /api/serveur-tables/table/:tableId` | Affectation d'une table spécifique |
-| `POST /api/serveur-tables` | Assigner une table à un serveur |
-| `POST /api/serveur-tables/bulk` | Assigner plusieurs tables d'un coup |
-| `DELETE /api/serveur-tables/:tableId` | Désassigner une table |
-| `PATCH /api/serveur-tables/reassign` | Transférer des tables d'un serveur à un autre |
+### 6.2 Affectation quotidienne automatique
 
-### 6.2 Transfert en cas d'absence
+**Endpoint** : `POST /api/serveur-tables/run-check`
+
+1. Vérifie le planning du jour
+2. Serveurs absents → désactivés, tables libérées
+3. Tables libres → redistribuées aux serveurs actifs
+
+### 6.3 Transfert en cas d'absence
 
 **Endpoint** : `PATCH /api/serveur-tables/reassign`
 
 ```json
-{
-  "fromServeurId": 2,
-  "toServeurId": 3,
-  "tableId": 5
-}
+{ "fromServeurId": 2, "toServeurId": 3, "tableId": 5 }
 ```
 
-Si `tableId` n'est pas fourni, **toutes** les tables du serveur source sont transférées au serveur cible.
-
-### 6.3 Affectation quotidienne automatique
-
-**Endpoint** : `POST /api/serveur-tables/run-check`
-
-**Ce qui se passe :**
-1. Le système vérifie le **planning** du jour
-2. Les serveurs **absents** sont désactivés, leurs tables libérées
-3. Les serveurs **présents** sont activés
-4. Les tables libres sont **redistribuées** équitablement aux serveurs actifs
-
-### 6.4 Le serveur voit uniquement ses tables
-
-**Endpoint** : `GET /api/tables/serveur` — Renvoie les tables assignées au serveur connecté.
-
-### 6.5 Endpoints de gestion des tables
-
-| Endpoint | Accès | Description |
-|---|---|---|
-| `GET /api/tables` | ADMIN, MANAGER, SERVEUR | Toutes les tables du restaurant |
-| `GET /api/tables/serveur` | ADMIN, MANAGER, SERVEUR | Tables du serveur connecté |
-| `POST /api/tables` | ADMIN, MANAGER | Créer une table |
-| `PATCH /api/tables/:id` | ADMIN, MANAGER | Modifier une table |
-| `DELETE /api/tables/:id` | ADMIN, MANAGER | Supprimer une table |
-| `PATCH /api/tables/:id/assign` | ADMIN, MANAGER | Assigner un serveur à la table |
-| `PATCH /api/tables/:id/statut` | ADMIN, MANAGER, SERVEUR | Changer le statut de la table |
-| `GET /api/tables/:id/qrcode` | ADMIN, MANAGER, SERVEUR | Données QR code de la table |
+Sans `tableId` → toutes les tables sont transférées.
 
 ---
 
 ## 7. NOTIFICATIONS EN TEMPS RÉEL
 
-### 7.1 Toasts sur l'écran
+### 7.1 Événements Socket.IO
 
-Dès qu'un événement se produit, un toast s'affiche sur le téléphone des personnes concernées.
+| Événement | Destinataire | Toast | Son |
+|---|---|---|---|
+| `nouvelle_commande` | `serveur:{id}` | ✅ | 🔊 |
+| `nouvelle_commande_cuisine` | `cuisine` | ✅ | 🔊 |
+| `nouvelle_commande_bar` | `bar` | ✅ | 🔊 |
+| `commande_status_change` | `serveur:{id}`, `admin` | ✅ | 🔊 |
+| `demande_facture` | `serveur:{id}`, `admin` | ✅ | 🔊 |
+| `notification_user` | `serveur:{id}` | ✅ | 🔊 |
+| `notification_admin` | `admin` | ✅ | 🔊 |
+| `commande_status` | `table:{id}` (client) | ✅ | - |
 
-| Événement | Événement Socket | Qui reçoit |
-|---|---|---|
-| Nouvelle commande client | `nouvelle_commande` | Serveur assigné |
-| Nouvelle commande cuisine | `nouvelle_commande_cuisine` | Salle `cuisine` |
-| Nouvelle commande bar | `nouvelle_commande_bar` | Salle `bar` |
-| Changement de statut | `commande_status_change` | Serveur + salle `admin` |
-| Notification utilisateur | `notification_user` | Utilisateur spécifique |
-| Notification admin | `notification_admin` | Salle `admin` |
+### 7.2 Rooms
 
-### 7.2 Centre de notifications
-
-| Endpoint | Description |
+| Room | Membres |
 |---|---|
-| `GET /api/notifications` | Notifications de l'utilisateur connecté (filtrable par `?date=YYYY-MM-DD`) |
-| `PATCH /api/notifications/:id/read` | Marquer une notification comme lue |
-| `PATCH /api/notifications/read-all` | Marquer toutes les notifications comme lues |
+| `serveur:{userId}` | Un serveur |
+| `cuisine` | Tous les cuisiniers |
+| `bar` | Tous les barmen |
+| `admin` | Admins, managers, caissiers |
+| `table:{tableId}` | Client(s) d'une table |
 
-### 7.3 Enregistrement Socket.IO
+### 7.3 Apparence des toasts
 
-Les clients mobiles s'enregistrent via l'événement `register` :
-
-```json
-{ "userId": "2", "role": "SERVEUR" }
-```
-
-**Rooms par rôle :**
-- `serveur:{userId}` — Chaque serveur a sa room individuelle
-- `cuisine` — Tous les cuisiniers
-- `bar` — Tous les barmen
-- `admin` — Admins et managers
-- `table:{tableId}` — Room client pour suivi de commande (événement `joinTable`)
+Les notifications utilisent un design **3D moderne** avec ombres prononcées, coins arrondis (20px), bande colorée à gauche et icône.
 
 ---
 
-## 8. EXEMPLES DE SCÉNARIOS COMPLETS
+## 8. DEMANDE D'ADDITION
 
-### Scénario A : Un couple au restaurant
+### 8.1 Côté client
 
-```
-19:00  Table 2 LIBRE
-       → M. Dupont scanne le QR code (clientRef=CLI-DP01)
-       → Mme Dupont scanne le QR code (clientRef=CLI-DP02)
+Le bouton **🧾 Demander l'addition** apparaît **uniquement** quand au moins une commande est `SERVIE`.
 
-19:05  CLI-DP01 commande : 1x Entrée (10€) + 1x Plat (20€) = 30€
-       CLI-DP02 commande : 1x Plat (18€) + 1x Dessert (8€) = 26€
-       → 2 commandes EN_ATTENTE dans la même Table 2
-       → Toast sur le tel du serveur : "Nouvelle commande • Table 2"
-       → Toast sur l'écran cuisine : "Nouvelle commande • Table 2"
+**Endpoint** : `POST /api/commandes/demande-facture`
 
-19:06  Serveur valide les 2 commandes
-       → Table 2 → OCCUPEE
-       → Toast : "Table 2 → validée"
+### 8.2 Côté staff
 
-19:06  Cuisine voit les plats, les passe en préparation puis prêts
-       → Toast sur le tel du serveur : "Table 2 → prête"
-
-19:30  Serveur sert les plats → SERVIE
-
-20:00  Les clients demandent l'addition
-       → Caissier : 30€ + 26€ = 56€ en Espèces
-       → Les 2 commandes → PAYEE
-       → Toast admin : "Paiement reçu table 2 — 56.00 €"
-       → Vérification : 0 commande active → Table 2 → LIBRE
-```
-
-### Scénario B : Transfert de tables (serveur absent)
-
-```
-08:00  Planning du jour : Jean, Marie, Paul sont programmés
-       → Check automatique : tables réparties
-
-10:00  Jean appelle : il est malade
-       → Manager utilise PATCH /api/serveur-tables/reassign
-       → fromServeurId: Jean, toServeurId: Marie
-       → Toutes les tables de Jean → Marie
-```
-
-### Scénario C : Table réservée
-
-```
-10:00  Le gérant réserve la Table 8 via PATCH /api/tables/8/statut
-       → Table 8 → RESERVEE
-
-19:00  Le client arrive, scanne le QR code et commande
-       → Commande EN_ATTENTE (la table reste RESERVEE)
-
-19:05  Le serveur valide
-       → Table 8 → OCCUPEE (écrase le statut RESERVEE)
-
-21:00  Paiement → Table 8 → LIBRE
-```
+Le serveur et le caissier reçoivent une notification : *"🧾 Demande d'addition — Table X"*. Le serveur apporte la facture physique au client.
 
 ---
 
-## 9. TABLEAU DE BORD (DASHBOARD)
+## 9. INTERFACE CLIENT (client.html)
 
-### Pour l'Admin/Manager
+### 9.1 Fonctionnalités
 
-**Endpoint** : `GET /api/statistiques/dashboard`
+- Menu par catégories avec images zoomables
+- Panier avec +/- et suppression
+- Confirmation de commande
+- **Historique des commandes** avec statut en temps réel (Socket.IO)
+- **Annulation d'article** (✕) tant que EN_ATTENTE
+- **Annulation de commande** (✕ Annuler) tant que EN_ATTENTE
+- **Demande d'addition** (visible quand SERVIE)
+- **Restauration automatique** de session (localStorage + fallback table)
 
-Statistiques du jour (commandes par statut, nombre de tables, total commandes).
+### 9.2 URLs publiques
 
-### Pour le Serveur
-
-**Endpoint** : `GET /api/commandes/stats` — Le serveur voit **uniquement ses propres commandes** du jour (filtré automatiquement par `serveurId`).
-
-### Pour la Cuisine/Bar
-
-Même endpoint `GET /api/commandes/stats` — Voient les stats globales du restaurant.
-
-### Statistiques avancées (ADMIN, MANAGER)
-
-| Endpoint | Description |
+| URL | Description |
 |---|---|
-| `GET /api/statistiques/dashboard` | Vue d'ensemble |
-| `GET /api/statistiques/ventes` | CA par jour (filtrable `?debut=&fin=`) |
-| `GET /api/statistiques/plats-populaires` | Top plats (`?limit=10`) |
-| `GET /api/statistiques/performance-serveurs` | Performance par serveur |
-| `GET /api/statistiques/affluence` | Affluence par heure |
+| `/client.html?tableId=X&restaurantId=Y` | Page de commande |
+| `/qrcodes.html` | Liste des QR codes |
+| `/qr-table-X.png` | QR code image |
 
 ---
 
-## 10. GESTION DES UTILISATEURS
-
-### Authentification
-
-| Endpoint | Accès | Description |
-|---|---|---|
-| `POST /api/auth/login` | Public | Connexion (téléphone + mot de passe) |
-| `POST /api/auth/register` | Public | Inscription |
-| `GET /api/auth/profile` | JWT | Profil utilisateur connecté |
-| `PATCH /api/auth/profile` | JWT | Modifier nom/photo |
-| `POST /api/auth/photo` | JWT | Upload photo de profil |
-| `PATCH /api/auth/password` | JWT | Changer mot de passe |
-| `POST /api/auth/forgot-password` | Public | Réinitialiser mot de passe |
-
-### Vérification planning à la connexion
-
-Lors du login, le système vérifie le planning du jour pour les rôles concernés :
-- **SERVEUR** : Un planning ACTIF aujourd'hui est obligatoire pour se connecter
-- **ADMIN, MANAGER, CUISINE, BAR, CAISSIER** : Pas de vérification planning
-
-### CRUD Utilisateurs (ADMIN, MANAGER)
-
-| Endpoint | Description |
-|---|---|
-| `GET /api/users` | Tous les utilisateurs du restaurant |
-| `GET /api/users/role/:role` | Filtrer par rôle |
-| `PATCH /api/users/:id` | Modifier un utilisateur |
-| `PATCH /api/users/:id/statut?statut=ACTIF` | Changer le statut |
-
----
-
-## 11. GESTION DU MENU
-
-| Endpoint | Accès | Description |
-|---|---|---|
-| `GET /api/menu/public/:restaurantId` | Public | Menu complet par catégories |
-| `GET /api/menu` | ADMIN, MANAGER | Tous les articles |
-| `POST /api/menu` | ADMIN, MANAGER | Créer un article |
-| `PATCH /api/menu/:id` | ADMIN, MANAGER | Modifier un article |
-| `DELETE /api/menu/:id` | ADMIN, MANAGER | Supprimer un article |
-| `PATCH /api/menu/:id/toggle` | ADMIN, MANAGER | Activer/désactiver un article |
-| `POST /api/menu/:id/image` | ADMIN, MANAGER | Upload image (JPEG, PNG, WEBP) |
-| `GET /api/menu/categories` | ADMIN, MANAGER | Liste des catégories |
-| `POST /api/menu/categories` | ADMIN, MANAGER | Créer une catégorie |
-
----
-
-## 12. GESTION DU PLANNING
-
-| Endpoint | Accès | Description |
-|---|---|---|
-| `GET /api/planning` | ADMIN, MANAGER | Tous les plannings |
-| `POST /api/planning` | ADMIN, MANAGER | Créer une entrée |
-| `GET /api/planning/mine` | JWT | Planning de l'utilisateur connecté |
-| `GET /api/planning/date/:date` | ADMIN, MANAGER | Planning d'une date spécifique |
-| `PATCH /api/planning/:id` | ADMIN, MANAGER | Modifier une entrée |
-| `DELETE /api/planning/:id` | ADMIN, MANAGER | Supprimer une entrée |
-
----
-
-## 13. RÉSUMÉ DES ÉTATS
+## 10. RÉSUMÉ DES ÉTATS
 
 ### Statuts de table
 ```
-LIBRE     → Aucun client, disponible
-OCCUPEE   → Client(s) présent(s), commande validée
-RESERVEE  → Réservée pour plus tard
+LIBRE     → Disponible
+OCCUPEE   → Client présent, commande validée
+RESERVEE  → Réservée
 ```
 
 ### Statuts de commande
 ```
-EN_ATTENTE     → Client a envoyé, en attente de validation
+EN_ATTENTE     → Client a envoyé (annulable)
 VALIDEE        → Serveur a confirmé
-EN_PREPARATION → En cours de préparation en cuisine/bar
-PRETE          → Prêt à être servi
-SERVIE         → Servi au client
-PAYEE          → Payé, facture générée
+EN_PREPARATION → Cuisine/bar préparent
+PRETE          → Tous les articles prêts (automatique)
+SERVIE         → Servi au client (demande addition possible)
+PAYEE          → Payé, table → LIBRE
 ANNULEE        → Annulée
 ```
 
-### Statuts de préparation (détails)
+### Statuts de préparation (articles)
 ```
-EN_PREPARATION → Par défaut, en attente de préparation
-PRET           → Prêt
+EN_PREPARATION → En attente de préparation
+PRET           → Article prêt
 ```
 
 ### Statuts de paiement
@@ -490,65 +338,74 @@ PAYEE      → Payé
 REMBOURSEE → Remboursé
 ```
 
-### Modes de paiement
-```
-ESPECES        → En espèces
-MOBILE_MONEY   → Mobile Money
-CARTE_BANCAIRE → Carte bancaire
-```
+---
+
+## 11. RÔLES ET PERMISSIONS
+
+| Rôle | Actions principales |
+|---|---|
+| **ADMIN** | Tout : utilisateurs, restaurant, stats, configuration |
+| **MANAGER** | Plannings, affectations, stats, toutes les actions de statut |
+| **SERVEUR** | Valider (EN_ATTENTE→VALIDEE), Servir (PRETE→SERVIE), voir ses tables |
+| **CUISINE** | Dashboard FIFO, En préparation (VALIDEE→EN_PREPARATION), Prêt par article, Tout prêt par table |
+| **BAR** | Dashboard FIFO, En préparation, Prêt par article, Tout prêt par table |
+| **CAISSIER** | Paiements, factures, réimpression, caisse, clôture |
 
 ---
 
-## 14. RÔLES UTILISATEURS
+## 12. ROUTES API COMPLÈTES
 
-| Rôle | Accès | Actions |
+### Auth (`/api/auth`)
+| Méthode | Route | Accès |
 |---|---|---|
-| **ADMIN** | Tout | Créer utilisateurs, gérer restaurant, paramétrer devise/téléphone, voir toutes les stats |
-| **MANAGER** | Tout | Créer plannings, assigner/transférer tables, voir stats |
-| **SERVEUR** | Tables assignées + commandes | Valider/servir commandes, voir ses tables, recevoir toasts temps réel |
-| **CUISINE** | Commandes à préparer | Changer statut commandes et détails, recevoir toasts nouvelles commandes |
-| **BAR** | Commandes bar | Même chose pour les boissons |
-| **CAISSIER** | Paiements | Encaisser, voir caisse du jour, factures, clôturer caisse |
+| POST | /login | Public |
+| POST | /register | Public |
+| GET | /profile | JWT |
+| PATCH | /profile | JWT |
+| POST | /photo | JWT |
+| PATCH | /password | JWT |
+| POST | /forgot-password | Public |
+
+### Commandes (`/api/commandes`)
+| Méthode | Route | Accès |
+|---|---|---|
+| POST | /client | Public |
+| POST | /client-annuler | Public (vérifié par sessionKey) |
+| POST | /client-annuler-detail | Public (vérifié par sessionKey) |
+| POST | /demande-facture | Public |
+| GET | /client-session/:sessionKey | Public |
+| GET | /table-public/:tableId | Public |
+| GET | / | ADMIN, MANAGER |
+| GET | /serveur | ADMIN, MANAGER, SERVEUR |
+| GET | /cuisine | CUISINE |
+| GET | /bar | BAR |
+| GET | /table/:tableId | ADMIN, MANAGER, SERVEUR |
+| GET | /stats | JWT |
+| PATCH | /:id/statut | ADMIN, MANAGER, SERVEUR, CUISINE, BAR |
+| PATCH | /details/:id/statut | CUISINE, BAR |
+| POST | /tout-pret | CUISINE, BAR |
+
+### Paiements (`/api/paiements`)
+| Méthode | Route | Accès |
+|---|---|---|
+| GET | /a-payer | ADMIN, MANAGER, CAISSIER |
+| POST | /payer/:commandeId | ADMIN, MANAGER, CAISSIER |
+| GET | /factures | ADMIN, MANAGER, CAISSIER |
+| GET | /factures/:id | ADMIN, MANAGER, CAISSIER |
+| GET | /factures/:id/imprimer | Public (avec token JWT en query) |
+| GET | /caisse/jour | ADMIN, MANAGER, CAISSIER |
+| POST | /caisse/cloture | ADMIN, MANAGER, CAISSIER |
 
 ---
 
-## 15. FONCTIONNALITÉS COMPLÉMENTAIRES
+## 13. SÉCURITÉ
 
-### Planning des employés
-- Admin/Manager crée des plannings pour chaque employé
-- Filtre par date et par rôle
-- Le planning détermine l'affectation automatique des tables
-- Bloque la connexion des serveurs sans planning du jour
-
-### Menu et catégories
-- Création/modification des plats avec prix, image, temps de préparation
-- Catégories avec destination (CUISINE, BAR, DESSERT)
-- Ordre de service pour l'affichage
-- Activation/désactivation des plats
-- Upload d'images (JPEG, PNG, WEBP)
-
-### Statistiques
-- Chiffre d'affaires du jour
-- Plats les plus populaires
-- Performance des serveurs
-- Taux d'occupation / affluence horaire
-
-### Caisse
-- Encaissement par mode de paiement (Espèces, Mobile Money, Carte Bancaire)
-- Clôture de caisse journalière
-- Historique des factures avec filtre par date
-- Impression des factures en HTML
-
-### Notifications
-- En temps réel via Socket.IO (toasts)
-- Centre de notifications avec historique
-- Marquage lu/non lu (individuel ou en masse)
-
-### Profil utilisateur
-- Photo de profil
-- Changement de mot de passe
-- Mot de passe oublié (réinitialisation par téléphone)
+- **Authentification** : JWT (12h) + Bcrypt (10 rounds)
+- **Vérification planning** : les serveurs sans planning du jour ne peuvent pas se connecter
+- **SessionKey** : utilisé pour vérifier que le client est bien propriétaire de sa commande
+- **Token JWT dans l'URL** : pour l'impression des reçus (le navigateur n'a pas le token)
+- **Guards par rôle** : chaque endpoint vérifie les permissions
 
 ---
 
-*Documentation mise à jour le 28 mai 2026 — RestoPro v1.0*
+*Documentation mise à jour le 28 mai 2026 — RestoPro v2.0*
