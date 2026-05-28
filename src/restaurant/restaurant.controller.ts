@@ -37,7 +37,7 @@ export class RestaurantController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() data: { nom?: string; adresse?: string; devise?: string; telephone?: string }) {
+  update(@Param('id') id: string, @Body() data: { nom?: string; adresse?: string; devise?: string; telephone?: string; statut?: string; dateReouverture?: string }) {
     return this.restaurantService.update(+id, data);
   }
 }

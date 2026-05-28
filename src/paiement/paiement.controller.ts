@@ -53,7 +53,6 @@ export class PaiementController {
     @Query('token') token: string,
     @Res() res: Response,
   ) {
-    // Vérification manuelle du token JWT
     if (token) {
       try {
         this.jwtService.verify(token);
@@ -74,6 +73,10 @@ export class PaiementController {
   @Roles(Role.ADMIN, Role.MANAGER, Role.CAISSIER)
   @Get('caisse/jour')
   getCaisseJour(@Request() req) {
+    // Caissier ne voit que ses transactions depuis sa dernière clôture
+    if (req.user.role === 'CAISSIER') {
+      return this.paiementService.getCaisseJourCaissier(req.user.restaurantId, req.user.id);
+    }
     return this.paiementService.getCaisseJour(req.user.restaurantId);
   }
 
@@ -82,5 +85,28 @@ export class PaiementController {
   @Post('caisse/cloture')
   cloturerCaisse(@Request() req) {
     return this.paiementService.cloturerCaisse(req.user.restaurantId, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('caisse/cloture-globale')
+  cloturerCaisseGlobale(
+    @Request() req,
+    @Body() data: { dateReouverture: string },
+  ) {
+    return this.paiementService.cloturerCaisseGlobale(req.user.restaurantId, req.user.id, data.dateReouverture);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('caisse/clotures')
+  getHistoriqueClotures(@Request() req, @Query('date') date?: string) {
+    return this.paiementService.getHistoriqueClotures(req.user.restaurantId, date);
+  }
+
+  @Get('caisse/statut-restaurant/:id')
+  async getStatutRestaurant(@Param('id') id: string) {
+    const ouvert = await this.paiementService.verifierOuverture(+id);
+    return { ouvert };
   }
 }

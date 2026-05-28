@@ -205,7 +205,134 @@ export class PaiementService {
   }
 
   async cloturerCaisse(restaurantId: number, caissierId: number) {
-    const caisse = await this.getCaisseJour(restaurantId);
+    const caisse = await this.getCaisseJourCaissier(restaurantId, caissierId);
+
+    // Enregistrer la clôture en base
+    await this.prisma.clotureCaisse.create({
+      data: {
+        caissierId,
+        totalEspeces: caisse.details.totalEspeces,
+        totalMobile: caisse.details.totalMobileMoney,
+        totalCarte: caisse.details.totalCarte,
+        totalGeneral: caisse.totalGeneral,
+        nbFactures: caisse.nombreFactures,
+        type: 'CAISSIER',
+        restaurantId,
+      },
+    });
+
     return { ...caisse, cloture: new Date().toISOString(), caissierId, statut: 'CLOTUREE' };
+  }
+
+  async getCaisseJourCaissier(restaurantId: number, caissierId: number) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Dernière clôture de ce caissier aujourd'hui
+    const derniereCloture = await this.prisma.clotureCaisse.findFirst({
+      where: { caissierId, dateCloture: { gte: today, lt: tomorrow }, type: 'CAISSIER' },
+      orderBy: { dateCloture: 'desc' },
+    });
+
+    const dateDebut = derniereCloture?.dateCloture || today;
+
+    const factures = await this.prisma.facture.findMany({
+      where: {
+        dateFacture: { gte: dateDebut, lt: tomorrow },
+        caissierId,
+        commande: { table: { restaurantId } },
+      },
+      include: { commande: true },
+    });
+
+    const totalEspeces = factures.filter((f) => f.modePaiement === 'ESPECES').reduce((s, f) => s + Number(f.montantTotal), 0);
+    const totalMobileMoney = factures.filter((f) => f.modePaiement === 'MOBILE_MONEY').reduce((s, f) => s + Number(f.montantTotal), 0);
+    const totalCarte = factures.filter((f) => f.modePaiement === 'CARTE_BANCAIRE').reduce((s, f) => s + Number(f.montantTotal), 0);
+
+    return {
+      date: today.toISOString().split('T')[0],
+      depuis: dateDebut.toISOString(),
+      nombreFactures: factures.length,
+      totalGeneral: factures.reduce((s, f) => s + Number(f.montantTotal), 0),
+      details: { totalEspeces, totalMobileMoney, totalCarte },
+    };
+  }
+
+  async cloturerCaisseGlobale(restaurantId: number, adminId: number, dateReouverture: string) {
+    // Enregistrer la clôture globale
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const factures = await this.prisma.facture.findMany({
+      where: { dateFacture: { gte: today, lt: tomorrow }, commande: { table: { restaurantId } } },
+    });
+
+    const totalEspeces = factures.filter((f) => f.modePaiement === 'ESPECES').reduce((s, f) => s + Number(f.montantTotal), 0);
+    const totalMobileMoney = factures.filter((f) => f.modePaiement === 'MOBILE_MONEY').reduce((s, f) => s + Number(f.montantTotal), 0);
+    const totalCarte = factures.filter((f) => f.modePaiement === 'CARTE_BANCAIRE').reduce((s, f) => s + Number(f.montantTotal), 0);
+
+    await this.prisma.clotureCaisse.create({
+      data: {
+        caissierId: adminId,
+        totalEspeces,
+        totalMobile: totalMobileMoney,
+        totalCarte,
+        totalGeneral: factures.reduce((s, f) => s + Number(f.montantTotal), 0),
+        nbFactures: factures.length,
+        type: 'GLOBAL',
+        restaurantId,
+      },
+    });
+
+    // Fermer le restaurant jusqu'à la date de réouverture
+    const dateReouv = new Date(dateReouverture);
+    if (isNaN(dateReouv.getTime())) {
+      throw new BadRequestException('Date de réouverture invalide. Format attendu: YYYY-MM-DDTHH:mm');
+    }
+
+    await this.prisma.restaurant.update({
+      where: { id: restaurantId },
+      data: { statut: 'FERME', dateReouverture: dateReouv },
+    });
+
+    return {
+      message: 'Restaurant fermé. Réouverture prévue le ' + dateReouverture,
+      dateReouverture,
+    };
+  }
+
+  async verifierOuverture(restaurantId: number) {
+    const resto = await this.prisma.restaurant.findUnique({ where: { id: restaurantId } });
+    if (!resto) return true;
+    if (resto.statut === 'OUVERT') return true;
+    if (resto.dateReouverture && new Date() >= resto.dateReouverture) {
+      // Réouverture automatique
+      await this.prisma.restaurant.update({
+        where: { id: restaurantId },
+        data: { statut: 'OUVERT', dateReouverture: null },
+      });
+      return true;
+    }
+    return false;
+  }
+
+  async getHistoriqueClotures(restaurantId: number, date?: string) {
+    const where: any = { restaurantId };
+    if (date) {
+      const debut = new Date(date);
+      debut.setHours(0, 0, 0, 0);
+      const fin = new Date(date);
+      fin.setHours(23, 59, 59, 999);
+      where.dateCloture = { gte: debut, lte: fin };
+    }
+    return this.prisma.clotureCaisse.findMany({
+      where,
+      include: { caissier: { select: { nom: true } } },
+      orderBy: { dateCloture: 'desc' },
+    });
   }
 }

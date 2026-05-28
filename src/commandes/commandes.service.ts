@@ -20,11 +20,24 @@ export class CommandesService {
   }) {
     const table = await this.prisma.tableRestaurant.findUnique({
       where: { id: data.tableId },
-      include: { restaurant: { select: { devise: true, id: true } } },
+      include: { restaurant: { select: { devise: true, id: true, statut: true, dateReouverture: true } } },
     });
 
     if (!table) {
       throw new Error('Table introuvable');
+    }
+
+    // Vérifier si le restaurant est fermé
+    if (table.restaurant?.statut === 'FERME') {
+      if (table.restaurant.dateReouverture && new Date() >= table.restaurant.dateReouverture) {
+        // Réouverture auto
+        await this.prisma.restaurant.update({
+          where: { id: table.restaurant.id },
+          data: { statut: 'OUVERT', dateReouverture: null },
+        });
+      } else {
+        throw new Error('Le restaurant est fermé. Les commandes ne sont pas possibles.');
+      }
     }
 
     const isComptoir = table.zone?.toUpperCase() === 'COMPTOIR' || table.numero.toUpperCase() === 'T00' || table.numero.toUpperCase() === 'COMPTOIR';

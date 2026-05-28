@@ -56,4 +56,13 @@ export class StatistiquesController {
   ) {
     return this.statistiquesService.getAffluence(req.user.restaurantId, debut, fin);
   }
+
+  @Get('performance-caissiers')
+  getPerformanceCaissiers(
+    @Request() req,
+    @Query('debut') debut?: string,
+    @Query('fin') fin?: string,
+  ) {
+    return this.statistiquesService.getPerformanceCaissiers(req.user.restaurantId, debut, fin);
+  }
 }

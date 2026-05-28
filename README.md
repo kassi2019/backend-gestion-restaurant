@@ -122,7 +122,21 @@ Toutes les routes sont préfixées par `/api` sauf les routes client (`/client`,
 - **Rôles** : Admin, Manager, Serveur, Cuisine, Bar, Caissier
 - **Planning** : affectation automatique quotidienne des tables
 
+## Fonctionnalités clés
+
+- **QR Code** : URL absolue, scan → menu → commande
+- **Sur place & À emporter** : comptoir T00, CMD-XXXX
+- **Temps réel** : Socket.IO + toasts 3D + son + vibration
+- **Dashboards dédiés** : Cuisine (FIFO), Bar, Caissier, Serveur
+- **Double suivi** : statut commande + statut par article, auto-PRETE
+- **Caisse** : clôture caissier (session personnelle) + clôture globale (admin)
+- **Statistiques** : filtres par date, performance serveurs/caissiers
+- **Planning** : obligatoire (sauf admin/manager), listes déroulantes
+- **Restauration session** : localStorage + fallback table
+- **Annulation client** : article ou commande avant validation
+- **Rôles** : Admin, Manager, Serveur, Cuisine, Bar, Caissier
+
 ## Documentation
 
-- [DOCUMENTATION.md](./DOCUMENTATION.md) — Parcours fonctionnel complet
+- [DOCUMENTATION.md](./DOCUMENTATION.md) — Parcours fonctionnel complet v3.0
 - [Cahier_Des_Charges_Restaurant_QRCode_v2.md](./Cahier_Des_Charges_Restaurant_QRCode_v2.md) — Spécifications techniques v3.0

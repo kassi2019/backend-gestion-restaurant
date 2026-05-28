@@ -89,6 +89,38 @@ export class StatistiquesService {
     return result.sort((a, b) => b.chiffreAffaires - a.chiffreAffaires);
   }
 
+  async getPerformanceCaissiers(restaurantId: number, dateDebut?: string, dateFin?: string) {
+    const { debut, fin } = parseDateRange(dateDebut, dateFin);
+
+    const caissiers = await this.prisma.utilisateur.findMany({
+      where: { restaurantId, role: 'CAISSIER' },
+      select: { id: true, nom: true },
+    });
+
+    const result = [];
+    for (const c of caissiers) {
+      const factures = await this.prisma.facture.findMany({
+        where: {
+          caissierId: c.id,
+          dateFacture: { gte: debut, lte: fin },
+        },
+      });
+      const totalEspeces = factures.filter((f) => f.modePaiement === 'ESPECES').reduce((s, f) => s + Number(f.montantTotal), 0);
+      const totalMobile = factures.filter((f) => f.modePaiement === 'MOBILE_MONEY').reduce((s, f) => s + Number(f.montantTotal), 0);
+      const totalCarte = factures.filter((f) => f.modePaiement === 'CARTE_BANCAIRE').reduce((s, f) => s + Number(f.montantTotal), 0);
+
+      result.push({
+        nom: c.nom,
+        factures: factures.length,
+        chiffreAffaires: factures.reduce((s, f) => s + Number(f.montantTotal), 0),
+        especes: totalEspeces,
+        mobile: totalMobile,
+        carte: totalCarte,
+      });
+    }
+    return result.sort((a, b) => b.chiffreAffaires - a.chiffreAffaires);
+  }
+
   async getAffluence(restaurantId: number, dateDebut?: string, dateFin?: string) {
     const { debut, fin } = parseDateRange(dateDebut, dateFin);
     const commandes = await this.prisma.commande.findMany({

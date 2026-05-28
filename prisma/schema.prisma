@@ -14,10 +14,18 @@ model Restaurant {
   adresse         String            @db.Text
   devise          String            @default("€") @db.VarChar(10)
   telephone       String?           @db.VarChar(30)
+  statut          StatutRestaurant   @default(OUVERT)
+  dateReouverture DateTime?          @map("date_reouverture")
   utilisateurs    Utilisateur[]
   tables          TableRestaurant[]
   categories      CategorieMenu[]
   menus           Menu[]
+  clotures        ClotureCaisse[]
+}
+
+enum StatutRestaurant {
+  OUVERT
+  FERME
 }
 
 // ---- Utilisateurs (employés + admin) ----
@@ -41,6 +49,7 @@ model Utilisateur {
   serveurTables   ServeurTable[]          @relation("ServeurAssignations")
   sessionsClients SessionClient[]
   facturesCaissier Facture[]             @relation("CaissierFactures")
+  cloturesCaissier ClotureCaisse[]
 
   @@map("utilisateurs")
 }
@@ -279,4 +288,27 @@ model ServeurTable {
 enum StatutAffectation {
   ACTIF
   INACTIF
+}
+
+// ---- Clôture de caisse ----
+model ClotureCaisse {
+  id              Int               @id @default(autoincrement())
+  caissierId      Int               @map("caissier_id")
+  caissier        Utilisateur       @relation(fields: [caissierId], references: [id])
+  dateCloture     DateTime          @default(now()) @map("date_cloture")
+  totalEspeces    Decimal           @default(0) @map("total_especes") @db.Decimal(10, 2)
+  totalMobile     Decimal           @default(0) @map("total_mobile") @db.Decimal(10, 2)
+  totalCarte      Decimal           @default(0) @map("total_carte") @db.Decimal(10, 2)
+  totalGeneral    Decimal           @default(0) @map("total_general") @db.Decimal(10, 2)
+  nbFactures      Int               @default(0) @map("nb_factures")
+  type            TypeCloture       @default(CAISSIER)
+  restaurantId    Int               @map("restaurant_id")
+  restaurant      Restaurant        @relation(fields: [restaurantId], references: [id])
+
+  @@map("clotures_caisse")
+}
+
+enum TypeCloture {
+  CAISSIER
+  GLOBAL
 }

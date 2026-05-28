@@ -7,121 +7,89 @@
 
 ---
 
-## Table des matières
-
-1. [Objectifs du Projet](#1-objectifs-du-projet)
-2. [Fonctionnement Général](#2-fonctionnement-général)
-3. [Cycle de Vie d'une Commande](#3-cycle-de-vie-dune-commande)
-4. [Gestion des Tables et Serveurs](#4-gestion-des-tables-et-serveurs)
-5. [Gestion des Notifications](#5-gestion-des-notifications)
-6. [Technologies](#6-technologies)
-7. [Structure de la Base de Données](#7-structure-de-la-base-de-données)
-8. [Interfaces des Acteurs](#8-interfaces-des-différents-acteurs)
-9. [Gestion du Planning et Affectation](#9-gestion-du-planning-et-affectation)
-10. [Authentification et Sécurité](#10-authentification-et-sécurité)
-11. [Routes API](#11-routes-api)
-12. [Fonctionnalités Détaillées](#12-fonctionnalités-détaillées)
-
----
-
 ## 1. Objectifs du Projet
 
-- Digitaliser les menus des restaurants
-- Permettre aux clients de commander via QR Code
-- Gérer les tables et les serveurs
-- Notifier les serveurs, la cuisine et le bar en temps réel avec **son**
+- Digitaliser les menus via QR Code
+- Commandes sur place, à emporter et en ligne
+- Gestion des tables et serveurs avec affectation automatique
+- Notifications temps réel avec son et vibration
 - Suivi des commandes article par article
-- Automatiser la transition des statuts
-- Améliorer l'expérience client (restauration de session, annulation)
+- Transition automatique des statuts
+- Caisse avec clôture caissier et clôture globale
+- Statistiques avec filtres par période
+- Restauration de session client
 
 ---
 
 ## 2. Fonctionnement Général
 
-1. Le client scanne le QR Code → page web avec le menu
-2. Le système crée ou restaure une session (localStorage + fallback table)
-3. Le client commande → EN_ATTENTE (annulable)
-4. Le serveur valide → VALIDEE (table → OCCUPEE)
-5. Cuisine/bar préparent → EN_PREPARATION
-6. Chaque article marqué prêt → quand tous prêts → PRETE (automatique)
-7. Le serveur sert → SERVIE (bouton addition visible)
-8. Le caissier encaisse → PAYEE (table → LIBRE)
+### 2.1 Sur place
+Client scanne QR → Menu → Commande (EN_ATTENTE) → Serveur valide → Cuisine/Bar préparent → Prêt → Servi → Payé
 
----
+### 2.2 À emporter (Comptoir)
+Client scanne QR T00 → Menu → Commande (auto-validée) → CMD-XXXX → Cuisine/Bar → Prêt → Client donne CMD → Caissier paye
 
-## 3. Cycle de Vie d'une Commande
-
+### 2.3 Cycle de vie
 ```
-EN_ATTENTE ──[Serveur]──▶ VALIDEE ──[Cuisine/Bar]──▶ EN_PREPARATION
-     │                                                      │
-     │ [Client peut annuler]                                 │ [Articles → PRET]
-     │                                                      │ [Tous PRET → auto]
-     ▼                                                      ▼
-  ANNULEE                                                PRETE
-                                                    │
-                                           [Serveur] │
-                                                    ▼
-                                                  SERVIE
-                                                    │
-                                         [Caissier]  │
-                                                    ▼
-                                                  PAYEE
+EN_ATTENTE → VALIDEE → EN_PREPARATION → PRETE(auto) → SERVIE → PAYEE
 ```
 
-### Règles métier
+---
 
-| Transition | Qui | Condition |
-|---|---|---|
-| EN_ATTENTE → VALIDEE | Serveur | - |
-| EN_ATTENTE → ANNULEE | Client | Via API avec sessionKey |
-| Article → PRET | Cuisine/Bar | Unitaire ou "Tout prêt" |
-| Commande → PRETE | **Automatique** | Tous les articles PRET |
-| PRETE → SERVIE | Serveur | - |
-| SERVIE → PAYEE | Caissier | - |
-| Table → LIBRE | **Automatique** | Après paiement, si 0 commande active (hors EN_ATTENTE) |
+## 3. Modules
+
+### 3.1 Commandes
+- Création client sans auth (sessionKey)
+- Annulation article/commande avant validation
+- Suivi deux niveaux : commande + détails article
+- Auto-validation pour commandes comptoir (T00/zone Comptoir)
+- Transition automatique PRETE quand tous articles prêts
+- Demande d'addition par le client
+- Recherche par CMD-XXXX pour la caisse
+
+### 3.2 Dashboards par rôle
+- **Cuisine** : FIFO avec timer, code couleur, "Tout prêt" par table
+- **Bar** : identique cuisine, montants filtrés par destination
+- **Caissier** : caisse personnelle, recherche CMD, clôture
+- **Serveur** : ses tables et commandes uniquement
+- **Admin/Manager** : vue complète, clôture globale
+
+### 3.3 Paiements et Caisse
+- 3 modes : Espèces, Mobile Money, Carte Bancaire
+- Facture automatique avec réimpression
+- **Clôture caissier** : transactions personnelles, remplaçant à zéro
+- **Clôture globale** : fermeture restaurant, réouverture automatique
+
+### 3.4 Planning
+- Obligatoire : SERVEUR, CUISINE, BAR, CAISSIER
+- Non requis : ADMIN, MANAGER
+- Filtres par rôle et agent (listes déroulantes)
+- Affectation automatique quotidienne des tables
+
+### 3.5 Statistiques
+- Filtre par intervalle de date (défaut : aujourd'hui)
+- CA, commandes, panier moyen
+- Top plats, performance serveurs, performance caissiers
+- Affluence horaire
+- Blocs cliquables avec modales de détail
+
+### 3.6 Notifications
+- Toasts 3D avec ombres et bordures
+- Sonnerie (bip WAV) à chaque événement
+- Vibration sur mobile
+- Socket.IO temps réel
+
+### 3.7 Interface Client Web
+- Menu responsive, panier, confirmation
+- Historique temps réel (Socket.IO)
+- Annulation article/commande
+- Demande d'addition
+- Restauration automatique de session (localStorage + fallback)
+- Affichage numéro CMD pour comptoir
 
 ---
 
-## 4. Gestion des Tables et Serveurs
-
-- Chaque table a un QR code unique
-- Une table est assignée à un serveur
-- Transfert possible en cas d'absence
-- Affectation quotidienne automatique selon planning
-- Libération automatique après paiement (EN_ATTENTE ignorées)
-
----
-
-## 5. Gestion des Notifications
-
-### Canaux
-
-| Canal | Technologie | Usage |
-|---|---|---|
-| **Toasts visuels** | react-native-toast-message | Interface mobile |
-| **Son** | expo-av (WAV) | Bip à chaque événement |
-| **Socket.IO** | socket.io | Temps réel |
-
-### Toasts 3D
-
-Design moderne avec ombres prononcées, coins arrondis, bande colorée par type (succès/erreur/info).
-
-### Événements
-
-| Événement | Room | Son |
-|---|---|---|
-| `nouvelle_commande` | `serveur:{id}` | 🔊 |
-| `nouvelle_commande_cuisine` | `cuisine` | 🔊 |
-| `nouvelle_commande_bar` | `bar` | 🔊 |
-| `commande_status_change` | `serveur:{id}`, `admin` | 🔊 |
-| `demande_facture` | `serveur:{id}`, `admin` | 🔊 |
-| `notification_user` | `serveur:{id}` | 🔊 |
-| `notification_admin` | `admin` | 🔊 |
-| `commande_status` | `table:{id}` (client web) | - |
-
----
-
-## 6. Technologies
+## 4. Technologies
 
 | Composant | Technologie |
 |---|---|
@@ -131,194 +99,62 @@ Design moderne avec ombres prononcées, coins arrondis, bande colorée par type 
 | Base de données | MySQL 8 |
 | ORM | Prisma 4 |
 | Temps réel | Socket.IO 4 |
+| Audio/Vibration | expo-av + Vibration API |
 | Authentification | JWT + Passport + Bcrypt |
-| Audio | expo-av |
+| QR Codes | qrcode (npm) |
 
 ---
 
-## 7. Structure de la Base de Données
+## 5. Base de Données
 
-### 7.1 Modèles principaux
+### Tables principales
+- **Restaurant** : nom, adresse, devise, telephone, statut (OUVERT/FERME), dateReouverture
+- **Utilisateur** : nom, telephone, mot_de_passe, role, statut, photo
+- **TableRestaurant** : numero, zone, statut, serveur_id, qr_code
+- **CategorieMenu** : nom, ordre, destination (BAR/CUISINE/DESSERT)
+- **Menu** : nom, prix, image, temps_preparation, disponibilite
+- **SessionClient** : session_key, table_id, date_arrivee, statut
+- **Commande** : statut, montant, typeCommande (SUR_PLACE/A_EMPORTER), modePaiement, clientRef
+- **CommandeDetail** : article, quantite, prix, statutPreparation
+- **Facture** : numero, montant, modePaiement, date
+- **Notification** : utilisateur, message, lu
+- **Planning** : utilisateur, jour, heureDebut, heureFin, statut
+- **ServeurTable** : utilisateur, table, dateAffectation
+- **ClotureCaisse** : caissier, totaux par mode, type (CAISSIER/GLOBAL)
 
-**Restaurant** : id, nom, adresse, devise, telephone
-
-**Utilisateur** : id, nom, telephone (unique), mot_de_passe (hashé), role (ADMIN/MANAGER/SERVEUR/CUISINE/BAR/CAISSIER), statut (ACTIF/INACTIF/CONGE/SUSPENDU), photo, restaurant_id
-
-**TableRestaurant** : id, numero, zone, statut (LIBRE/OCCUPEE/RESERVEE), serveur_id, qr_code, restaurant_id
-
-**CategorieMenu** : id, nom, ordre_service, destination (BAR/CUISINE/DESSERT), restaurant_id
-
-**Menu** : id, nom, prix, image, categorie_id, temps_preparation, disponibilite, restaurant_id
-
-**SessionClient** : id, session_key (unique), table_id, date_arrivee, statut (ACTIVE/TERMINEE), utilisateur_id
-
-**Commande** : id, table_id, serveur_id, session_id, statut (EN_ATTENTE/VALIDEE/EN_PREPARATION/PRETE/SERVIE/PAYEE/ANNULEE), montant_total, date_commande, mode_paiement, statut_paiement, date_paiement, caissier_id, client_ref
-
-**CommandeDetail** : id, commande_id, menu_id, quantite, prix, statut_preparation (EN_PREPARATION/PRET)
-
-**Facture** : id, numero (unique), commande_id, montant_total, mode_paiement, date_facture, caissier_id
-
-**Notification** : id, utilisateur_id, message, lu, date_notification
-
-**Planning** : id, utilisateur_id, jour, heure_debut, heure_fin, statut
-
-**ServeurTable** : id, utilisateur_id, table_id, date_affectation, statut
+### Enums
+- **Role** : ADMIN, MANAGER, SERVEUR, CUISINE, BAR, CAISSIER
+- **StatutCommande** : EN_ATTENTE, VALIDEE, EN_PREPARATION, PRETE, SERVIE, PAYEE, ANNULEE
+- **TypeCommande** : SUR_PLACE, A_EMPORTER
+- **TypeCloture** : CAISSIER, GLOBAL
+- **StatutRestaurant** : OUVERT, FERME
+- **Destination** : BAR, CUISINE, DESSERT
 
 ---
 
-## 8. Interfaces des Différents Acteurs
+## 6. Règles métier
 
-### Dashboard Cuisine (dédié)
-- Stats : à préparer / en cours / prêtes
-- Files d'attente FIFO triées par ancienneté
-- Code couleur : 🔴 >15min / 🟡 5-15min / 🟢 <5min
-- Timer ⏱ par table
-- Actions : "En préparation" (commande), "Prêt" (article), "Tout prêt" (table)
-- Montants : total cuisine uniquement
-
-### Dashboard Bar (dédié)
-- Même structure que la cuisine
-- Montants : total bar uniquement
-
-### Dashboard Caissier
-- Caisse du jour avec total général et détail par mode
-- Commandes à payer groupées par table
-- Historique factures avec réimpression (🖨)
-- Clôture de caisse
-
-### Dashboard Serveur
-- Stats globales du jour
-- Mes tables et commandes
-- Navigation rapide
-
-### Dashboard Admin/Manager
-- Vue complète avec toutes les stats
-- Contrôle manuel total
-
-### Interface Client (Web)
-- Menu responsive par catégories
-- Panier, confirmation, historique temps réel
-- Annulation article/commande (si EN_ATTENTE)
-- Demande d'addition (si SERVIE)
-- Restauration automatique de session
-
----
-
-## 9. Gestion du Planning et Affectation
-
-- Planning par jour et par heure
-- Vérification à la connexion (serveur sans planning = refusé)
-- Affectation quotidienne automatique (`POST /api/serveur-tables/run-check`)
-- Transfert de tables entre serveurs (unitaire ou global)
-- Rôles sans planning requis : ADMIN, MANAGER, CUISINE, BAR, CAISSIER
-
----
-
-## 10. Authentification et Sécurité
-
-| Aspect | Détail |
+| Règle | Détail |
 |---|---|
-| Login | Téléphone + mot de passe |
-| Hashage | Bcrypt (10 rounds) |
-| Token | JWT (12h) |
-| Double vérification | Statut ACTIF + Planning (serveur) |
-| Session client | Clé unique, pas d'auth |
-| Vérification actions client | sessionKey |
-| Reçu imprimable | Token JWT dans l'URL |
+| Planning obligatoire | SERVEUR, CUISINE, BAR, CAISSIER (pas ADMIN, MANAGER) |
+| Auto-validation comptoir | Commandes zone Comptoir ou T00 → VALIDEE direct |
+| Auto-PRETE | Dès que tous les articles (cuisine + bar) sont PRET |
+| Libération table | Après paiement si 0 commande active (EN_ATTENTE ignorées) |
+| Clôture caissier | Chaque caissier voit ses transactions depuis sa dernière clôture |
+| Clôture globale | Restaurant FERME, réouverture automatique à l'heure prévue |
+| Session client | localStorage (< 6h) + fallback table (session aujourd'hui) |
+| Annulation client | Uniquement si EN_ATTENTE, par article ou commande entière |
+| Impression reçu | URL avec token JWT en query param |
 
 ---
 
-## 11. Routes API
+## 7. Sécurité
 
-Préfixe : `/api` (sauf routes client)
-
-### Auth — `/api/auth`
-| Méthode | Route | Accès |
-|---|---|---|
-| POST | /login | Public |
-| POST | /register | Public |
-| GET | /profile | JWT |
-| PATCH | /profile | JWT |
-| POST | /photo | JWT |
-| PATCH | /password | JWT |
-| POST | /forgot-password | Public |
-
-### Commandes — `/api/commandes`
-| Méthode | Route | Accès |
-|---|---|---|
-| POST | /client | Public |
-| POST | /client-annuler | Public |
-| POST | /client-annuler-detail | Public |
-| POST | /demande-facture | Public |
-| GET | /client-session/:key | Public |
-| GET | /table-public/:id | Public |
-| GET | / | ADMIN, MANAGER |
-| GET | /serveur | ADMIN, MANAGER, SERVEUR |
-| GET | /cuisine | CUISINE |
-| GET | /bar | BAR |
-| GET | /table/:id | ADMIN, MANAGER, SERVEUR |
-| GET | /stats | JWT |
-| PATCH | /:id/statut | ADMIN, MANAGER, SERVEUR, CUISINE, BAR |
-| PATCH | /details/:id/statut | CUISINE, BAR |
-| POST | /tout-pret | CUISINE, BAR |
-
-### Paiements — `/api/paiements`
-| Méthode | Route | Accès |
-|---|---|---|
-| GET | /a-payer | ADMIN, MANAGER, CAISSIER |
-| POST | /payer/:id | ADMIN, MANAGER, CAISSIER |
-| GET | /factures | ADMIN, MANAGER, CAISSIER |
-| GET | /factures/:id | ADMIN, MANAGER, CAISSIER |
-| GET | /factures/:id/imprimer | Public (+token) |
-| GET | /caisse/jour | ADMIN, MANAGER, CAISSIER |
-| POST | /caisse/cloture | ADMIN, MANAGER, CAISSIER |
-
-### Autres modules
-Voir [DOCUMENTATION.md](./DOCUMENTATION.md) pour les routes Users, Tables, Menu, Planning, Serveur-Tables, Notifications, Statistiques, Restaurant.
-
----
-
-## 12. Fonctionnalités Détaillées
-
-### Gestion des Menus
-- CRUD plats et catégories
-- Upload images (JPEG, PNG, WEBP)
-- Activation/désactivation
-- Destination par catégorie (CUISINE, BAR, DESSERT)
-
-### Gestion des Tables
-- CRUD avec QR code automatique
-- Assignation serveur, statut, zone
-
-### Gestion des Commandes
-- Création client sans auth (sessionKey)
-- Annulation client (article ou commande) avant validation
-- Suivi à deux niveaux : commande + détails
-- Routage automatique cuisine/bar
-- Transition automatique PRETE quand tous les articles prêts
-- Demande d'addition par le client
-
-### Dashboard Cuisine/Bar
-- Interface dédiée FIFO avec timer et code couleur
-- Actions par article et par table ("Tout prêt")
-- Montants filtrés par destination
-
-### Gestion des Paiements
-- 3 modes : Espèces, Mobile Money, Carte Bancaire
-- Facture automatique avec numéro unique
-- Réimpression depuis l'historique
-- Clôture de caisse journalière
-
-### Notifications
-- Temps réel via Socket.IO
-- Toasts 3D design moderne
-- Sonnerie à chaque événement
-- Persistance en base de données
-
-### Restauration de Session Client
-- localStorage (navigateur) : sessionKey sauvegardée, vérification fraîcheur < 6h
-- Fallback table : commandes actives du jour
-- Nettoyage automatique
+- JWT 12h + Bcrypt 10 rounds
+- Double vérification : statut ACTIF + planning
+- SessionKey pour propriété des commandes client
+- Guards par rôle sur chaque endpoint
+- Token JWT dans l'URL pour impression reçu
 
 ---
 

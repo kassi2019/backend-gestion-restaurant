@@ -55,8 +55,9 @@ export class AuthService {
       },
     });
 
-    // Tous les rôles doivent avoir un planning aujourd'hui
-    if (!planning) {
+    // Planning obligatoire pour tous sauf ADMIN et MANAGER
+    const rolesSansPlanning = ['ADMIN', 'MANAGER'];
+    if (!planning && !rolesSansPlanning.includes(user.role)) {
       throw new UnauthorizedException(
         "Aucun service programmé aujourd'hui. Connexion refusée.",
       );

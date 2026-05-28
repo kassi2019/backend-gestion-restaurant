@@ -68,6 +68,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .image-viewer.show { display: flex; }
 .image-viewer img { max-width: 95%; max-height: 85%; object-fit: contain; border-radius: 8px; }
 .image-viewer .close-btn { position: absolute; top: 24px; right: 20px; width: 40px; height: 40px; border-radius: 20px; background: rgba(255,255,255,0.2); border: none; color: white; font-size: 22px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.closed-banner { text-align: center; padding: 60px 20px; }
+.closed-icon { font-size: 64px; margin-bottom: 16px; }
+.closed-banner h2 { font-size: 22px; color: #f44336; font-weight: 800; margin-bottom: 12px; }
+.closed-banner p { font-size: 14px; color: #666; margin-bottom: 4px; }
+.closed-date { font-size: 24px; font-weight: 900; color: #f44336; margin-top: 8px !important; }
 </style>
 </head>
 <body>
@@ -80,6 +85,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <div class="multi-hint">💡 Chaque personne à la table peut scanner le QR code et commander indépendamment</div>
 
 <div class="loading" id="loading">Chargement du menu...</div>
+
+<div class="closed-banner" id="closedBanner" style="display:none">
+  <div class="closed-icon">🔒</div>
+  <h2>Restaurant fermé</h2>
+  <p>Réouverture prévue le</p>
+  <p class="closed-date" id="closedDate"></p>
+</div>
 
 <div id="app" style="display:none">
   <div class="categories" id="categories"></div>
@@ -254,8 +266,23 @@ async function loadRestaurantInfo() {
         restaurantNom = info.nom;
         document.querySelector('.header h1').textContent = '🍽 ' + restaurantNom;
       }
+
+      // Vérifier si le restaurant est fermé
+      if (info.statut === 'FERME') {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('closedBanner').style.display = 'block';
+        if (info.dateReouverture) {
+          var dateR = new Date(info.dateReouverture);
+          var dateStr = dateR.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+          var heureStr = dateR.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+          document.getElementById('closedDate').textContent = dateStr + ' à ' + heureStr;
+        }
+        return false; // restaurant fermé
+      }
     }
   } catch(e) { /* garde les valeurs par défaut */ }
+  return true; // restaurant ouvert
 }
 
 document.getElementById('tableBadge').textContent = 'Table ' + tableId + ' • Client ' + clientId;
@@ -266,7 +293,8 @@ let cart = [];
 let selectedCat = null;
 
 async function loadMenu() {
-  await loadRestaurantInfo();
+  const ouvert = await loadRestaurantInfo();
+  if (!ouvert) return; // Restaurant fermé, ne pas charger le menu
   try {
     const res = await fetch(`/api/menu/public/${restaurantId}`);
     categories = await res.json();
