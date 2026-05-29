@@ -16,11 +16,22 @@ model Restaurant {
   telephone       String?           @db.VarChar(30)
   statut          StatutRestaurant   @default(OUVERT)
   dateReouverture DateTime?          @map("date_reouverture")
+  typeAbonnement  TypeAbonnement    @default(TRIAL) @map("type_abonnement")
+  dateFinAbonnement DateTime?       @map("date_fin_abonnement")
+  derniereNotifAbonnement DateTime? @map("derniere_notif_abonnement")
+  historiqueAbonnement HistoriqueAbonnement[]
   utilisateurs    Utilisateur[]
   tables          TableRestaurant[]
   categories      CategorieMenu[]
   menus           Menu[]
   clotures        ClotureCaisse[]
+  codesActivation CodeActivation[]
+}
+
+enum TypeAbonnement {
+  TRIAL
+  MENSUEL
+  ANNUEL
 }
 
 enum StatutRestaurant {
@@ -55,6 +66,7 @@ model Utilisateur {
 }
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
   MANAGER
   SERVEUR
@@ -311,4 +323,33 @@ model ClotureCaisse {
 enum TypeCloture {
   CAISSIER
   GLOBAL
+}
+
+// ---- Codes d'activation d'abonnement ----
+model CodeActivation {
+  id              Int       @id @default(autoincrement())
+  codeEncrypted   String    @map("code_encrypted") @db.VarChar(255)
+  dureeJours      Int       @map("duree_jours")
+  estUtilise      Boolean   @default(false) @map("est_utilise")
+  dateUtilisation DateTime? @map("date_utilisation")
+  restaurantId    Int?      @map("restaurant_id")
+  restaurant      Restaurant? @relation(fields: [restaurantId], references: [id])
+  dateCreation    DateTime  @default(now()) @map("date_creation")
+
+  @@map("codes_activation")
+}
+
+// ---- Historique d'abonnement ----
+model HistoriqueAbonnement {
+  id              Int       @id @default(autoincrement())
+  restaurantId    Int       @map("restaurant_id")
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id])
+  typeAbonnement  TypeAbonnement @default(TRIAL) @map("type_abonnement")
+  dureeJours      Int       @map("duree_jours")
+  dateDebut       DateTime  @map("date_debut")
+  dateFin         DateTime  @map("date_fin")
+  codeUtilise     String?   @map("code_utilise") @db.VarChar(255)
+  dateCreation    DateTime  @default(now()) @map("date_creation")
+
+  @@map("historique_abonnement")
 }

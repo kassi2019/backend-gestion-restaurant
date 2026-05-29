@@ -7,6 +7,9 @@ async function main() {
   const hashedPassword = await bcrypt.hash('123456', 10);
 
   // Create restaurant
+  const dateFinTrial = new Date();
+  dateFinTrial.setDate(dateFinTrial.getDate() + 14); // Trial 14 jours
+
   const restaurant = await prisma.restaurant.upsert({
     where: { id: 1 },
     update: {},
@@ -14,9 +17,26 @@ async function main() {
       nom: 'RestoPro Demo',
       adresse: '123 Avenue du Restaurant, Kinshasa',
       telephone: '+243990000000',
+      typeAbonnement: 'TRIAL',
+      dateFinAbonnement: dateFinTrial,
     },
   });
-  console.log('Restaurant créé:', restaurant.nom);
+  console.log('Restaurant créé:', restaurant.nom, '- Abonnement TRIAL jusqu\'au', dateFinTrial.toLocaleDateString('fr-FR'));
+
+  // Create SUPER_ADMIN (fournisseur du logiciel)
+  const superAdmin = await prisma.utilisateur.upsert({
+    where: { telephone: '0999999999' },
+    update: {},
+    create: {
+      nom: 'Super Admin',
+      telephone: '0999999999',
+      mot_de_passe: hashedPassword,
+      role: 'SUPER_ADMIN',
+      statut: 'ACTIF',
+      restaurantId: restaurant.id,
+    },
+  });
+  console.log('Super Admin créé:', superAdmin.nom, '- Tél: 0999999999 / Mot de passe: 123456');
 
   // Create admin user
   const admin = await prisma.utilisateur.upsert({
@@ -157,12 +177,39 @@ async function main() {
   });
   console.log('Planning créé pour le serveur');
 
+  // Créer un code d'activation de test (chiffré AES)
+  const crypto = require('crypto');
+  const CODE_SECRET = 'activ-code-secret-key-2024';
+  const key = Buffer.from(CODE_SECRET.padEnd(32, '0').slice(0, 32), 'utf-8');
+
+  function encryptCode(plain: string): string {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    let enc = cipher.update(plain, 'utf-8', 'hex');
+    enc += cipher.final('hex');
+    return iv.toString('hex') + ':' + enc;
+  }
+
+  const codeTestClair = 'RESTO-TEST-CODE';
+  const codeTestEncrypted = encryptCode(codeTestClair);
+  await prisma.codeActivation.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      codeEncrypted: codeTestEncrypted,
+      dureeJours: 30,
+    },
+  });
+  console.log('Code test créé:', codeTestClair, '- Durée: 30 jours (chiffré en base)');
+
   console.log('\n=== Seed terminé avec succès ! ===');
   console.log('Identifiants de test:');
-  console.log('  Admin:    0990000000 / 123456');
-  console.log('  Serveur:  0990000001 / 123456');
-  console.log('  Cuisine:  0990000002 / 123456');
-  console.log('  Bar:      0990000003 / 123456');
+  console.log('  Super Admin: 0999999999 / 123456');
+  console.log('  Admin:       0990000000 / 123456');
+  console.log('  Serveur:     0990000001 / 123456');
+  console.log('  Cuisine:     0990000002 / 123456');
+  console.log('  Bar:         0990000003 / 123456');
+  console.log('Code activation test: RESTO-TEST-CODE (30 jours)');
 }
 
 main()

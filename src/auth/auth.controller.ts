@@ -3,6 +3,8 @@ import {
   Post,
   Get,
   Patch,
+  Delete,
+  Param,
   Body,
   UseGuards,
   Request,
@@ -13,13 +15,21 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { AuthService } from './auth.service';
+import { ActivationService } from '../activation/activation.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
+import { Roles } from './decorators/roles.decorator';
+import { Role } from '@prisma/client';
+import { SuperAdminGuard } from './guards/super-admin.guard';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private activationService: ActivationService,
+  ) {}
 
   @Post('login')
   login(@Body() dto: LoginDto) {
@@ -81,5 +91,49 @@ export class AuthController {
   uploadPhoto(@Request() req, @UploadedFile() file: Express.Multer.File) {
     const photoUrl = '/uploads/profiles/' + file.filename;
     return this.authService.updateProfile(req.user.id, { photo: photoUrl });
+  }
+
+  // ---- Abonnement ----
+
+  @UseGuards(JwtAuthGuard)
+  @Get('abonnement')
+  getAbonnement(@Request() req) {
+    return this.activationService.getStatus(req.user.restaurantId);
+  }
+
+  // Public : permet d'activer même si l'abonnement est expiré
+  @Post('activer')
+  activerCode(@Body() data: { telephone: string; code: string }) {
+    return this.activationService.activerCode(data.telephone, data.code);
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Post('generer-codes')
+  genererCodes(@Body() data: { dureeJours: number; nombre: number }) {
+    return this.activationService.genererCodes(data.dureeJours, data.nombre);
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get('codes')
+  listeCodes() {
+    return this.activationService.listeCodes();
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Delete('codes/:id')
+  supprimerCode(@Param('id') id: string) {
+    return this.activationService.supprimerCode(parseInt(id));
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get('super-dashboard')
+  getDashboard() {
+    return this.activationService.getDashboard();
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get('historique/:restaurantId')
+  getHistorique(@Param('restaurantId') restaurantId: string) {
+    return this.activationService.getHistorique(parseInt(restaurantId));
   }
 }

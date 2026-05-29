@@ -74,7 +74,10 @@ export class TablesService {
         },
       });
 
-      const ip = (process.env.ADRESSE_IP || 'localhost').replace(/^https?:\/\//, '');
+      const ip = (process.env.ADRESSE_IP || 'localhost').replace(
+        /^https?:\/\//,
+        '',
+      );
       const port = process.env.PORT || '3000';
       const host = ip === '0.0.0.0' ? 'localhost' : ip;
       const qrUrl = `http://${host}:${port}/client.html?tableId=${table.id}&restaurantId=${data.restaurantId}`;

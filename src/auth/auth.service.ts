@@ -20,7 +20,17 @@ export class AuthService {
     const user = await this.prisma.utilisateur.findUnique({
       where: { telephone: dto.telephone },
       include: {
-        restaurant: { select: { nom: true, devise: true, telephone: true } },
+        restaurant: {
+          select: {
+            nom: true,
+            devise: true,
+            telephone: true,
+            statut: true,
+            dateReouverture: true,
+            typeAbonnement: true,
+            dateFinAbonnement: true,
+          },
+        },
       },
     });
 
@@ -42,25 +52,65 @@ export class AuthService {
       throw new UnauthorizedException('Téléphone ou mot de passe incorrect');
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // SUPER_ADMIN bypass toutes les vérifications (planning + abonnement + fermeture)
+    if (user.role !== 'SUPER_ADMIN') {
+      // Vérification de la fermeture du restaurant
+      const rolesAutorises = ['ADMIN', 'MANAGER'];
+      if (
+        user.restaurant?.statut === 'FERME' &&
+        !rolesAutorises.includes(user.role)
+      ) {
+        // Vérifier réouverture automatique
+        if (
+          user.restaurant.dateReouverture &&
+          new Date() >= user.restaurant.dateReouverture
+        ) {
+          await this.prisma.restaurant.update({
+            where: { id: user.restaurantId },
+            data: { statut: 'OUVERT', dateReouverture: null },
+          });
+          // Continuer le login normalement
+        } else {
+          const reouverture = user.restaurant.dateReouverture
+            ? ` Réouverture prévue le ${user.restaurant.dateReouverture.toLocaleString('fr-FR')}.`
+            : '';
+          throw new UnauthorizedException(
+            `Le restaurant est fermé.${reouverture}`,
+          );
+        }
+      }
 
-    const planning = await this.prisma.planning.findFirst({
-      where: {
-        utilisateurId: user.id,
-        jour: {
-          gte: today,
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const planning = await this.prisma.planning.findFirst({
+        where: {
+          utilisateurId: user.id,
+          jour: {
+            gte: today,
+          },
+          statut: 'ACTIF',
         },
-        statut: 'ACTIF',
-      },
-    });
+      });
 
-    // Planning obligatoire pour tous sauf ADMIN et MANAGER
-    const rolesSansPlanning = ['ADMIN', 'MANAGER'];
-    if (!planning && !rolesSansPlanning.includes(user.role)) {
-      throw new UnauthorizedException(
-        "Aucun service programmé aujourd'hui. Connexion refusée.",
-      );
+      // Planning obligatoire pour tous sauf ADMIN et MANAGER
+      const rolesSansPlanning = ['ADMIN', 'MANAGER'];
+      if (!planning && !rolesSansPlanning.includes(user.role)) {
+        throw new UnauthorizedException(
+          "Aucun service programmé aujourd'hui. Connexion refusée.",
+        );
+      }
+
+      // Vérification de l'abonnement du restaurant
+      const maintenant = new Date();
+      if (
+        user.restaurant?.dateFinAbonnement &&
+        user.restaurant.dateFinAbonnement < maintenant
+      ) {
+        throw new UnauthorizedException(
+          `Abonnement expiré depuis le ${user.restaurant.dateFinAbonnement.toLocaleString('fr-FR')}. Veuillez activer un nouveau code.`,
+        );
+      }
     }
 
     const payload = {
@@ -82,6 +132,8 @@ export class AuthService {
         devise: user.restaurant?.devise || '€',
         restaurantNom: user.restaurant?.nom || '',
         restaurantTelephone: user.restaurant?.telephone || '',
+        typeAbonnement: user.restaurant?.typeAbonnement || 'TRIAL',
+        dateFinAbonnement: user.restaurant?.dateFinAbonnement || null,
       },
     };
   }

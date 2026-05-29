@@ -1,4 +1,12 @@
-import { Controller, Get, Param, Res, Req, NotFoundException, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Res,
+  Req,
+  NotFoundException,
+  Query,
+} from '@nestjs/common';
 import { Response, Request } from 'express';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -8,13 +16,19 @@ import { PrismaService } from '../prisma/prisma.service';
 const PUBLIC_DIR = join(__dirname, '..', '..', 'public');
 
 function getBaseUrl(req: Request): string {
-  const ip = (process.env.ADRESSE_IP || 'localhost').replace(/^https?:\/\//, '');
+  const ip = (process.env.ADRESSE_IP || 'localhost').replace(
+    /^https?:\/\//,
+    '',
+  );
   if (ip === '0.0.0.0') {
     // Utiliser le host de la requête si l'IP est 0.0.0.0
     return `${req.protocol}://${req.get('host')}`;
   }
   const port = process.env.PORT || '3000';
-  const host = ip === 'localhost' || ip === '127.0.0.1' ? `localhost:${port}` : `${ip}:${port}`;
+  const host =
+    ip === 'localhost' || ip === '127.0.0.1'
+      ? `localhost:${port}`
+      : `${ip}:${port}`;
   return `http://${host}`;
 }
 
