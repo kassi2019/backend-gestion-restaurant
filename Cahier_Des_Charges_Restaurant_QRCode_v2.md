@@ -86,6 +86,7 @@ EN_ATTENTE → VALIDEE → EN_PREPARATION → PRETE(auto) → SERVIE → PAYEE
 - Demande d'addition
 - Restauration automatique de session (localStorage + fallback)
 - Affichage numéro CMD pour comptoir
+- **Restaurant fermé** : message rouge avec date/heure de réouverture, menu masqué
 
 ---
 

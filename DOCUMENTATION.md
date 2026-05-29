@@ -122,6 +122,7 @@ PAYEE          → Table → LIBRE (si plus de commandes actives)
 - Demande d'addition (si SERVIE)
 - Restauration automatique de session
 - Numéro CMD-XXXX pour les commandes comptoir
+- **Restaurant fermé** : message rouge avec date et heure de réouverture, menu masqué
 
 ---
 
@@ -141,11 +142,14 @@ PAYEE          → Table → LIBRE (si plus de commandes actives)
 Chaque caissier ne voit que **ses transactions** (depuis sa dernière clôture).
 Un remplaçant arrive → dashboard à zéro.
 
-### 5.3 Clôture Globale (Admin/Manager)
+### 5.3 Clôture Globale (Admin uniquement)
 
-- Ferme le restaurant : plus de commandes possibles
-- Définit une date/heure de réouverture
+- Accessible depuis **Profil → Paramètres du restaurant → 🔒 Clôture Globale**
+- Ferme le restaurant : plus de commandes possibles, menu client masqué
+- Définit une date et heure de réouverture
 - **Réouverture automatique** à l'heure prévue
+- Message rouge affiché sur la page client : "Restaurant fermé. Réouverture le [date] à [heure]"
+- Possibilité de réouvrir manuellement
 
 ### 5.4 Modes de paiement
 
@@ -292,6 +296,16 @@ Terrasse, Intérieur, VIP, **Comptoir**
 | GET | /performance-serveurs | debut, fin |
 | GET | /performance-caissiers | debut, fin |
 | GET | /affluence | debut, fin |
+
+---
+
+### 13. Paramètres du restaurant
+
+Accessible depuis **Profil → 🏪 Paramètres du restaurant**.
+
+Deux menus avec navigation par onglets :
+- **🏪 Informations** : nom, adresse, téléphone, devise
+- **🔒 Clôture Globale** (admin uniquement) : statut, date/heure de réouverture
 
 ---
 

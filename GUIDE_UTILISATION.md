@@ -302,10 +302,19 @@ Avatar (haut gauche) → **Mon Profil** :
 - Photo de profil
 - Changement de mot de passe
 
-### Paramètres Restaurant (Admin)
-Profil → **🏪 Paramètres du restaurant** :
-- Nom, adresse, téléphone, devise
-- **🔒 Clôture Globale** : fermer le restaurant
+### Paramètres du Restaurant
+Profil → **🏪 Paramètres du restaurant**.
+
+Deux menus par onglets :
+- **🏪 Informations** : nom, adresse, téléphone, devise
+- **🔒 Clôture Globale** (admin uniquement) : statut, date/heure de réouverture, bouton fermer/réouvrir
+
+### Fermeture du restaurant
+Quand l'admin ferme le restaurant :
+- La page client affiche un message rouge : *"Restaurant fermé. Réouverture le [date] à [heure]"*
+- Le menu est masqué
+- Aucune commande ne peut être passée
+- À l'heure prévue → réouverture automatique
 
 ---
 
