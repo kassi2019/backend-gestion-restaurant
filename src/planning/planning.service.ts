@@ -5,6 +5,21 @@ import { PrismaService } from '../prisma/prisma.service';
 export class PlanningService {
   constructor(private prisma: PrismaService) {}
 
+  // Convertit une heure (HH:MM ou ISO string) en Date sur 1970-01-01
+  private parseHeure(h: string): Date {
+    if (!h) throw new Error('Heure invalide');
+    // Si c'est déjà une ISO string complète, extraire juste l'heure
+    if (h.includes('T')) {
+      const d = new Date(h);
+      if (isNaN(d.getTime())) throw new Error('Date invalide');
+      return d;
+    }
+    // Format HH:MM
+    const d = new Date(`1970-01-01T${h}:00`);
+    if (isNaN(d.getTime())) throw new Error('Heure invalide');
+    return d;
+  }
+
   async create(data: {
     utilisateurId: number;
     jour: string;
@@ -15,8 +30,8 @@ export class PlanningService {
       data: {
         utilisateurId: data.utilisateurId,
         jour: new Date(data.jour),
-        heureDebut: new Date(`1970-01-01T${data.heureDebut}:00`),
-        heureFin: new Date(`1970-01-01T${data.heureFin}:00`),
+        heureDebut: this.parseHeure(data.heureDebut),
+        heureFin: this.parseHeure(data.heureFin),
       },
     });
   }
@@ -58,8 +73,8 @@ export class PlanningService {
   async update(id: number, data: { jour?: string; heureDebut?: string; heureFin?: string }) {
     const updateData: any = {};
     if (data.jour) updateData.jour = new Date(data.jour);
-    if (data.heureDebut) updateData.heureDebut = new Date(`1970-01-01T${data.heureDebut}:00`);
-    if (data.heureFin) updateData.heureFin = new Date(`1970-01-01T${data.heureFin}:00`);
+    if (data.heureDebut) updateData.heureDebut = this.parseHeure(data.heureDebut);
+    if (data.heureFin) updateData.heureFin = this.parseHeure(data.heureFin);
     return this.prisma.planning.update({
       where: { id },
       data: updateData,

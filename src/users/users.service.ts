@@ -57,4 +57,24 @@ export class UsersService {
       select: { id: true, nom: true, telephone: true, role: true, statut: true, photo: true },
     });
   }
+
+  async supprimer(userId: number) {
+    // Marquer comme INACTIF d'abord (soft-delete), puis supprimer
+    // On ne supprime que si l'utilisateur n'a pas de commandes liées
+    const user = await this.prisma.utilisateur.findUnique({
+      where: { id: userId },
+      include: { _count: { select: { commandes: true, serveurTables: true } } },
+    });
+    if (!user) throw new Error('Utilisateur introuvable');
+
+    if (user._count.commandes > 0) {
+      // Soft-delete : on garde en INACTIF
+      return this.prisma.utilisateur.update({
+        where: { id: userId },
+        data: { statut: 'INACTIF' },
+      });
+    }
+    // Suppression définitive
+    return this.prisma.utilisateur.delete({ where: { id: userId } });
+  }
 }

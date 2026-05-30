@@ -24,7 +24,7 @@ export class NotificationsService {
     return notif;
   }
 
-  async findByUser(user: { id: number; role: string; restaurantId: number }, date: string) {
+  async findByUser(user: { id: number; role: string; restaurantId: number }, date?: string) {
     const isAdminOrManager = user.role === 'ADMIN' || user.role === 'MANAGER';
 
     const where: any = {};
@@ -35,11 +35,14 @@ export class NotificationsService {
       where.utilisateur = { restaurantId: user.restaurantId };
     }
 
-    const debut = new Date(date);
-    debut.setHours(0, 0, 0, 0);
-    const fin = new Date(date);
-    fin.setHours(23, 59, 59, 999);
-    where.dateNotification = { gte: debut, lte: fin };
+    // Filtrer par date seulement si une date valide est fournie
+    if (date && !isNaN(new Date(date).getTime())) {
+      const debut = new Date(date);
+      debut.setHours(0, 0, 0, 0);
+      const fin = new Date(date);
+      fin.setHours(23, 59, 59, 999);
+      where.dateNotification = { gte: debut, lte: fin };
+    }
 
     return this.prisma.notification.findMany({
       where,

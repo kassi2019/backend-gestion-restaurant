@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -32,5 +32,11 @@ export class UsersController {
   @Patch(':id/statut')
   updateStatut(@Param('id') id: string, @Query('statut') statut: StatutUtilisateur) {
     return this.usersService.updateStatut(+id, statut);
+  }
+
+  @Roles(Role.ADMIN)
+  @Delete(':id')
+  supprimer(@Param('id') id: string) {
+    return this.usersService.supprimer(+id);
   }
 }

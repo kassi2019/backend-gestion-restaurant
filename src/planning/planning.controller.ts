@@ -10,7 +10,7 @@ import { Role } from '@prisma/client';
 export class PlanningController {
   constructor(private planningService: PlanningService) {}
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  // Tout le monde peut voir les plannings
   @Get()
   findAll(@Request() req) {
     return this.planningService.findAll(req.user.restaurantId);
@@ -22,12 +22,12 @@ export class PlanningController {
     return this.planningService.create(data);
   }
 
+  // Chaque employé voit son propre planning
   @Get('mine')
   getMine(@Request() req) {
     return this.planningService.findByUser(req.user.id);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER)
   @Get('date/:date')
   findByDate(@Request() req, @Param('date') date: string) {
     return this.planningService.findByDate(req.user.restaurantId, date);

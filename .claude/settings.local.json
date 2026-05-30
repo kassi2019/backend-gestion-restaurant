@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc *)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Read(//d/mes projots/gestion-restaurant/gestion-restaurant-web/**)",
+      "Bash(npm run *)"
     ]
   }
 }
