@@ -26,7 +26,7 @@ export class MenuService {
   async getMenus(restaurantId: number) {
     return this.prisma.menu.findMany({
       where: { restaurantId },
-      include: { categorie: true },
+      include: { categorie: true, variants: true },
     });
   }
 
@@ -48,6 +48,15 @@ export class MenuService {
     return this.prisma.menu.create({ data });
   }
 
+  async toggleDisponibleDemain(menuId: number) {
+    const menu = await this.prisma.menu.findUnique({ where: { id: menuId } });
+    if (!menu) throw new Error('Menu introuvable');
+    return this.prisma.menu.update({
+      where: { id: menuId },
+      data: { disponibleDemain: menu.disponibleDemain === 0 ? 1 : 0 },
+    });
+  }
+
   async toggleDisponibilite(menuId: number) {
     const menu = await this.prisma.menu.findUnique({ where: { id: menuId } });
     return this.prisma.menu.update({
@@ -64,6 +73,7 @@ export class MenuService {
         menus: {
           where: { disponibilite: true },
           orderBy: { nom: 'asc' },
+          include: { variants: true },
         },
       },
     });
@@ -81,5 +91,22 @@ export class MenuService {
     return this.prisma.menu.delete({
       where: { id: menuId },
     });
+  }
+
+  // ---- Variantes ----
+  async getVariants(menuId: number) {
+    return this.prisma.menuVariant.findMany({ where: { menuId } });
+  }
+
+  async addVariant(menuId: number, data: { nom: string; prix: number }) {
+    return this.prisma.menuVariant.create({ data: { menuId, nom: data.nom, prix: data.prix } });
+  }
+
+  async updateVariant(variantId: number, data: { nom?: string; prix?: number }) {
+    return this.prisma.menuVariant.update({ where: { id: variantId }, data });
+  }
+
+  async deleteVariant(variantId: number) {
+    return this.prisma.menuVariant.delete({ where: { id: variantId } });
   }
 }

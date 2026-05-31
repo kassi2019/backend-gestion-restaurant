@@ -1,0 +1,16 @@
+nom,prix,categorieId,tempsPreparation,variantes
+Eau,1000,1,5,
+Soda,1000,1,5,
+Heineken,1500,1,5,
+Coca-Cola 33cl,3.50,1,5,
+Jus d'Orange Pressé,4.00,1,5,
+Cocktail Cerelac,4000,1,5,"Avec alcool:4000|Sans alcool:3500"
+Club Mojito,3500,1,5,"Avec alcool:3500|Sans alcool:3000"
+Cocktail So-fresh,3500,1,5,"Avec alcool:3500|Sans alcool:3000"
+Salade César,8.00,2,10,
+Soupe du Jour,6.00,2,10,
+Poulet DG,15.00,3,30,
+Poisson Braisé,18.00,3,35,
+Mafé Viande,14.00,3,25,
+Fondue au Chocolat,9.00,4,20,
+Salade de Fruits,7.00,4,10,

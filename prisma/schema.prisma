@@ -137,12 +137,25 @@ model Menu {
   categorie         CategorieMenu   @relation(fields: [categorieId], references: [id])
   tempsPreparation  Int             @default(15) @map("temps_preparation")
   disponibilite     Boolean         @default(true)
+  disponibleDemain  Int             @default(0) @map("disponible_demain")
   restaurantId      Int             @map("restaurant_id")
   restaurant        Restaurant      @relation(fields: [restaurantId], references: [id])
 
   commandeDetails   CommandeDetail[]
+  variants          MenuVariant[]
 
   @@map("menus")
+}
+
+// ---- Variantes de menu (ex: avec/sans alcool) ----
+model MenuVariant {
+  id        Int     @id @default(autoincrement())
+  menuId    Int     @map("menu_id")
+  menu      Menu    @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  nom       String  @db.VarChar(100)
+  prix      Decimal @db.Decimal(10, 2)
+
+  @@map("menu_variants")
 }
 
 // ---- Sessions clients (QR Code) ----

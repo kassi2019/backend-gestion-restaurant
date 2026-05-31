@@ -17,7 +17,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cat-chip { padding: 8px 16px; border-radius: 20px; border: 1px solid #ddd; background: white; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: all 0.15s; }
 .cat-chip.active { background: #E86B2A; color: white; border-color: #E86B2A; }
 .menu-list { padding: 12px; padding-bottom: 120px; }
-.menu-item { display: flex; justify-content: space-between; align-items: center; background: white; border-radius: 12px; padding: 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; transition: background 0.1s; }
+.menu-item { display: flex; justify-content: space-between; align-items: center; background: white; border-radius: 12px; padding: 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; transition: background 0.1s; position: relative; }
 .menu-item:active { background: #fafafa; }
 .menu-img { width: 50px; height: 50px; border-radius: 10px; object-fit: cover; margin-right: 12px; }
 .menu-left { display: flex; align-items: center; flex: 1; }
@@ -27,6 +27,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .menu-right { display: flex; align-items: center; gap: 10px; }
 .price { font-weight: 700; color: #E86B2A; font-size: 15px; }
 .add-btn { background: #E86B2A; color: white; border: none; width: 30px; height: 30px; border-radius: 15px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.menu-item.indispo { opacity: 0.5; background: #f5f5f5; }
+.menu-item.indispo h3 { text-decoration: line-through; }
+.img-gray { filter: grayscale(100%); opacity: 0.5; }
+.indispo-badge { position: absolute; top: 8px; right: 8px; background: #EF4444; color: white; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+.add-btn-disabled { background: #ccc !important; cursor: not-allowed; }
+.add-btn-sm { width: 24px; height: 24px; font-size: 14px; }
+.menu-item-clickable { position: absolute; inset: 0; cursor: pointer; }
+.variant-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.variant-item { display: flex; align-items: center; gap: 8px; background: #f8f8f8; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+.variant-item:active { background: #FFF0E5; }
+.variant-name { flex: 1; font-size: 13px; font-weight: 600; color: #333; }
+.variant-price { font-size: 13px; font-weight: 700; color: #E86B2A; }
+.variant-label { color: #888; font-size: 11px; display: block; margin-top: 4px; }
 .cart-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 16px 16px; box-shadow: 0 -4px 20px rgba(0,0,0,0.12); z-index: 100; }
 .cart-info { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 .cart-count { font-size: 13px; color: #999; }
@@ -313,21 +326,38 @@ function render() {
     categories.map(c => `<div class="cat-chip${selectedCat===c.id?' active':''}" onclick="selectCat(${c.id})">${c.nom}</div>`).join('');
 
   const filtered = selectedCat ? menus.filter(m => m.categorieId === selectedCat) : menus;
-  document.getElementById('menuList').innerHTML = filtered.map(m => `
-    <div class="menu-item" onclick="addToCart(${m.id})">
+  document.getElementById('menuList').innerHTML = filtered.map(m => {
+    const indispo = m.disponibleDemain === 1;
+    const hasVariants = m.variants && m.variants.length > 0;
+    const variantHtml = hasVariants ? m.variants.map(v => `
+      <div class="variant-item" onclick="event.stopPropagation();addToCartVariant(${m.id}, ${v.id}, '${v.nom.replace(/'/g, "\\'")}', ${v.prix})">
+        <span class="variant-name">${v.nom}</span>
+        <span class="variant-price">${formatPrix(v.prix)}</span>
+        <div class="add-btn add-btn-sm">+</div>
+      </div>
+    `).join('') : '';
+
+    return `
+    <div class="menu-item${indispo ? ' indispo' : ''}">
+      ${indispo ? '<div class="indispo-badge">Indisponible</div>' : ''}
+      ${!hasVariants && !indispo ? `<div class="menu-item-clickable" onclick="addToCart(${m.id}, null, null, ${m.prix})"></div>` : ''}
       <div class="menu-left">
-        ${m.image ? `<img src="${m.image}" class="menu-img" onerror="this.style.display='none'" onclick="event.stopPropagation();openImageViewer('${m.image}')">` : ''}
+        ${m.image ? `<img src="${m.image}" class="menu-img${indispo ? ' img-gray' : ''}" onerror="this.style.display='none'" onclick="event.stopPropagation();openImageViewer('${m.image}')">` : ''}
         <div class="menu-left-text">
           <h3>${m.nom}</h3>
           <span>${m.categorieNom}${m.tempsPreparation ? ' • '+m.tempsPreparation+' min' : ''}</span>
+          ${hasVariants ? '<span class="variant-label">Choisir une option :</span>' : ''}
+          ${variantHtml ? `<div class="variant-list">${variantHtml}</div>` : ''}
         </div>
       </div>
+      ${!hasVariants ? `
       <div class="menu-right">
         <span class="price">${formatPrix(m.prix)}</span>
-        <div class="add-btn">+</div>
+        ${indispo ? '<div class="add-btn add-btn-disabled">—</div>' : '<div class="add-btn" onclick="event.stopPropagation();addToCart(${m.id}, null, null, ${m.prix})">+</div>'}
       </div>
+      ` : ''}
     </div>
-  `).join('');
+  `}).join('');
 
   updateCartBar();
 }
@@ -336,26 +366,30 @@ function formatPrix(montant) { return Number(montant).toFixed(2) + ' ' + devise;
 
 function selectCat(catId) { selectedCat = catId; render(); }
 
-function addToCart(menuId) {
-  const existing = cart.find(c => c.menuId === menuId);
+function addToCart(menuId, variantId, variantNom, prix) {
+  const m = menus.find(x => x.id === menuId);
+  const key = variantId ? `${menuId}_v${variantId}` : `${menuId}`;
+  const nom = variantNom ? `${m.nom} (${variantNom})` : m.nom;
+  const existing = cart.find(c => c.key === key);
   if (existing) existing.quantite++;
-  else {
-    const m = menus.find(x => x.id === menuId);
-    cart.push({ menuId: m.id, nom: m.nom, prix: Number(m.prix), quantite: 1 });
-  }
+  else cart.push({ key, menuId, variantId, nom, prix: Number(prix), quantite: 1 });
   updateCartBar();
-  showToast(m.nom + ' ajouté', false);
+  showToast(nom + ' ajouté', false);
 }
 
-function updateQty(menuId, delta) {
-  const item = cart.find(c => c.menuId === menuId);
+function addToCartVariant(menuId, variantId, variantNom, prix) {
+  addToCart(menuId, variantId, variantNom, prix);
+}
+
+function updateQty(key, delta) {
+  const item = cart.find(c => c.key === key);
   if (!item) return;
   item.quantite += delta;
-  if (item.quantite < 1) cart = cart.filter(c => c.menuId !== menuId);
+  if (item.quantite < 1) cart = cart.filter(c => c.key !== key);
   updateCartBar();
   renderCartItems();
 }
-function removeItem(menuId) { cart = cart.filter(c => c.menuId !== menuId); updateCartBar(); renderCartItems(); }
+function removeItem(key) { cart = cart.filter(c => c.key !== key); updateCartBar(); renderCartItems(); }
 
 function updateCartBar() {
   const count = cart.reduce((s, c) => s + c.quantite, 0);
@@ -386,12 +420,12 @@ function renderCartItems() {
     <p style="text-align:center;color:#999;font-size:12px;margin-bottom:12px">Client ${clientId} • Table ${tableId}</p>
     ${cart.map(c => `
       <div class="cart-item">
-        <button class="qty-btn" onclick="updateQty(${c.menuId},-1)">−</button>
+        <button class="qty-btn" onclick="updateQty('${c.key}',-1)">−</button>
         <span class="qty">${c.quantite}</span>
-        <button class="qty-btn" onclick="updateQty(${c.menuId},1)">+</button>
+        <button class="qty-btn" onclick="updateQty('${c.key}',1)">+</button>
         <span class="cart-item-name">${c.nom}</span>
         <span class="cart-item-price">${formatPrix(c.prix * c.quantite)}</span>
-        <button class="remove-btn" onclick="removeItem(${c.menuId})">×</button>
+        <button class="remove-btn" onclick="removeItem('${c.key}')">×</button>
       </div>
     `).join('') || '<p style="text-align:center;color:#999;padding:20px">Panier vide</p>'}
     <div style="text-align:right;padding:16px 0;font-size:18px;font-weight:800">
