@@ -17,8 +17,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cat-chip { padding: 8px 16px; border-radius: 20px; border: 1px solid #ddd; background: white; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: all 0.15s; }
 .cat-chip.active { background: #E86B2A; color: white; border-color: #E86B2A; }
 .menu-list { padding: 12px; padding-bottom: 120px; }
-.menu-item { display: flex; justify-content: space-between; align-items: center; background: white; border-radius: 12px; padding: 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; transition: background 0.1s; position: relative; }
-.menu-item:active { background: #fafafa; }
+.menu-item { display: flex; justify-content: space-between; align-items: center; background: white; border-radius: 12px; padding: 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: background 0.1s; position: relative; }
 .menu-img { width: 50px; height: 50px; border-radius: 10px; object-fit: cover; margin-right: 12px; }
 .menu-left { display: flex; align-items: center; flex: 1; }
 .menu-left-text { flex: 1; }
@@ -33,7 +32,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .indispo-badge { position: absolute; top: 8px; right: 8px; background: #EF4444; color: white; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
 .add-btn-disabled { background: #ccc !important; cursor: not-allowed; }
 .add-btn-sm { width: 24px; height: 24px; font-size: 14px; }
-.menu-item-clickable { position: absolute; inset: 0; cursor: pointer; }
 .variant-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
 .variant-item { display: flex; align-items: center; gap: 8px; background: #f8f8f8; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
 .variant-item:active { background: #FFF0E5; }
@@ -339,8 +337,6 @@ function render() {
 
     return `
     <div class="menu-item${indispo ? ' indispo' : ''}">
-      ${indispo ? '<div class="indispo-badge">Indisponible</div>' : ''}
-      ${!hasVariants && !indispo ? `<div class="menu-item-clickable" onclick="addToCart(${m.id}, null, null, ${m.prix})"></div>` : ''}
       <div class="menu-left">
         ${m.image ? `<img src="${m.image}" class="menu-img${indispo ? ' img-gray' : ''}" onerror="this.style.display='none'" onclick="event.stopPropagation();openImageViewer('${m.image}')">` : ''}
         <div class="menu-left-text">
@@ -353,7 +349,7 @@ function render() {
       ${!hasVariants ? `
       <div class="menu-right">
         <span class="price">${formatPrix(m.prix)}</span>
-        ${indispo ? '<div class="add-btn add-btn-disabled">—</div>' : '<div class="add-btn" onclick="event.stopPropagation();addToCart(${m.id}, null, null, ${m.prix})">+</div>'}
+        ${indispo ? '<div class="add-btn add-btn-disabled">—</div>' : `<div class="add-btn" onclick="event.stopPropagation();addToCart(${m.id}, null, null, ${m.prix})">+</div>`}
       </div>
       ` : ''}
     </div>

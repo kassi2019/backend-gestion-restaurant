@@ -154,6 +154,7 @@ model MenuVariant {
   menu      Menu    @relation(fields: [menuId], references: [id], onDelete: Cascade)
   nom       String  @db.VarChar(100)
   prix      Decimal @db.Decimal(10, 2)
+  image     String? @db.Text
 
   @@map("menu_variants")
 }

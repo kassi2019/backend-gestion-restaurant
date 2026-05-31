@@ -98,11 +98,11 @@ export class MenuService {
     return this.prisma.menuVariant.findMany({ where: { menuId } });
   }
 
-  async addVariant(menuId: number, data: { nom: string; prix: number }) {
-    return this.prisma.menuVariant.create({ data: { menuId, nom: data.nom, prix: data.prix } });
+  async addVariant(menuId: number, data: { nom: string; prix: number; image?: string }) {
+    return this.prisma.menuVariant.create({ data: { menuId, nom: data.nom, prix: data.prix, image: data.image } });
   }
 
-  async updateVariant(variantId: number, data: { nom?: string; prix?: number }) {
+  async updateVariant(variantId: number, data: { nom?: string; prix?: number; image?: string }) {
     return this.prisma.menuVariant.update({ where: { id: variantId }, data });
   }
 
