@@ -113,6 +113,13 @@ export class AuthService {
       }
     }
 
+    // Charger les modules de l'utilisateur
+    const userModules = await this.prisma.userModule.findMany({
+      where: { utilisateurId: user.id },
+      include: { module: true },
+      orderBy: { module: { ordre: 'asc' } },
+    });
+
     const payload = {
       sub: user.id,
       telephone: user.telephone,
@@ -134,6 +141,7 @@ export class AuthService {
         restaurantTelephone: user.restaurant?.telephone || '',
         typeAbonnement: user.restaurant?.typeAbonnement || 'TRIAL',
         dateFinAbonnement: user.restaurant?.dateFinAbonnement || null,
+        modules: userModules.map(um => ({ id: um.module.id, nom: um.module.nom, icon: um.module.icon, route: um.module.route })),
       },
     };
   }
@@ -161,6 +169,13 @@ export class AuthService {
         photo: dto.photo,
       },
     });
+
+    // Assigner les modules si fournis
+    if (dto.moduleIds?.length > 0) {
+      await this.prisma.userModule.createMany({
+        data: dto.moduleIds.map(mid => ({ utilisateurId: user.id, moduleId: mid })),
+      });
+    }
 
     return { message: 'Utilisateur créé avec succès', userId: user.id };
   }

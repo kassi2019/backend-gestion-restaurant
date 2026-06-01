@@ -202,6 +202,53 @@ async function main() {
   });
   console.log('Code test créé:', codeTestClair, '- Durée: 30 jours (chiffré en base)');
 
+  // Créer les modules par défaut
+  const defaultModules = [
+    { nom: 'Accueil', icon: '🏠', route: '/', ordre: 1 },
+    { nom: 'Tables', icon: '🪑', route: '/tables', ordre: 2 },
+    { nom: 'Affectation', icon: '🔄', route: '/assign-tables', ordre: 3 },
+    { nom: 'Commandes', icon: '📋', route: '/commandes', ordre: 4 },
+    { nom: 'Menu', icon: '🍽️', route: '/menu', ordre: 5 },
+    { nom: 'Planning', icon: '📅', route: '/planning', ordre: 6 },
+    { nom: 'Caisse', icon: '💰', route: '/caisse', ordre: 7 },
+    { nom: 'Users', icon: '👥', route: '/users', ordre: 8 },
+    { nom: 'Notifications', icon: '🔔', route: '/notifications', ordre: 9 },
+    { nom: 'Stats', icon: '📊', route: '/stats', ordre: 10 },
+    { nom: 'Paramètres', icon: '⚙️', route: '/parametres', ordre: 11 },
+    { nom: 'Abonnement', icon: '⭐', route: '/abonnement', ordre: 12 },
+    { nom: 'Générer codes', icon: '🔑', route: '/super/codes', ordre: 13 },
+    { nom: 'Stock', icon: '📦', route: '/stock', ordre: 14 },
+  ];
+  for (const m of defaultModules) {
+    await prisma.module.upsert({
+      where: { id: defaultModules.indexOf(m) + 1 },
+      update: { nom: m.nom, icon: m.icon, route: m.route, ordre: m.ordre },
+      create: m,
+    });
+  }
+  console.log('Modules créés:', defaultModules.length);
+
+  // Assigner les modules par défaut aux utilisateurs existants
+  const roleModules: Record<string, string[]> = {
+    SUPER_ADMIN: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Paramètres', 'Abonnement', 'Générer codes', 'Stock'],
+    ADMIN: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Paramètres', 'Abonnement', 'Stock'],
+    MANAGER: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats'],
+    SERVEUR: ['Accueil', 'Tables', 'Commandes', 'Planning', 'Notifications'],
+    CUISINE: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
+    BAR: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
+    CAISSIER: ['Accueil', 'Planning', 'Caisse', 'Notifications'],
+  };
+  const allUsers = await prisma.utilisateur.findMany({ include: { userModules: true } });
+  for (const utilisateur of allUsers) {
+    const noms = roleModules[utilisateur.role] || ['Accueil', 'Notifications'];
+    const mods = await prisma.module.findMany({ where: { nom: { in: noms } } });
+    await prisma.userModule.deleteMany({ where: { utilisateurId: utilisateur.id } });
+    for (const m of mods) {
+      await prisma.userModule.create({ data: { utilisateurId: utilisateur.id, moduleId: m.id } });
+    }
+  }
+  console.log('Modules assignés aux utilisateurs');
+
   console.log('\n=== Seed terminé avec succès ! ===');
   console.log('Identifiants de test:');
   console.log('  Super Admin: 0999999999 / 123456');

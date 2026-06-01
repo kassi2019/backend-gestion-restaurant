@@ -48,6 +48,13 @@ export class MenuController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('stocks')
+  getStocks(@Request() req) {
+    return this.menuService.getStocks(req.user.restaurantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Patch(':id/toggle')
   toggleDisponibilite(@Param('id') id: string) {
     return this.menuService.toggleDisponibilite(+id);
@@ -167,6 +174,13 @@ export class MenuController {
     try { fs.unlinkSync(file.path); } catch {}
 
     return { message: `${created} plat(s) et ${variantsCreated} variante(s) importé(s)`, created, variantsCreated };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Patch(':id/stock')
+  updateStock(@Param('id') id: string, @Body() data: { stock: number }) {
+    return this.menuService.updateStock(+id, data.stock);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

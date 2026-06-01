@@ -61,6 +61,7 @@ model Utilisateur {
   sessionsClients SessionClient[]
   facturesCaissier Facture[]             @relation("CaissierFactures")
   cloturesCaissier ClotureCaisse[]
+  userModules     UserModule[]
 
   @@map("utilisateurs")
 }
@@ -138,6 +139,7 @@ model Menu {
   tempsPreparation  Int             @default(15) @map("temps_preparation")
   disponibilite     Boolean         @default(true)
   disponibleDemain  Int             @default(0) @map("disponible_demain")
+  stock             Int             @default(-1)
   restaurantId      Int             @map("restaurant_id")
   restaurant        Restaurant      @relation(fields: [restaurantId], references: [id])
 
@@ -337,6 +339,29 @@ model ClotureCaisse {
 enum TypeCloture {
   CAISSIER
   GLOBAL
+}
+
+// ---- Modules dynamiques par utilisateur ----
+model Module {
+  id        Int          @id @default(autoincrement())
+  nom       String       @db.VarChar(100)
+  icon      String       @default("📌") @db.VarChar(10)
+  route     String       @db.VarChar(100)
+  ordre     Int          @default(0)
+  userModules UserModule[]
+
+  @@map("modules")
+}
+
+model UserModule {
+  id          Int       @id @default(autoincrement())
+  utilisateurId Int     @map("utilisateur_id")
+  utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  moduleId    Int       @map("module_id")
+  module      Module    @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([utilisateurId, moduleId])
+  @@map("user_modules")
 }
 
 // ---- Codes d'activation d'abonnement ----

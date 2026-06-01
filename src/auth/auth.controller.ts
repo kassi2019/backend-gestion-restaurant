@@ -23,13 +23,39 @@ import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { SuperAdminGuard } from './guards/super-admin.guard';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private authService: AuthService,
     private activationService: ActivationService,
+    private prisma: PrismaService,
   ) {}
+
+  @UseGuards(JwtAuthGuard)
+  @Get('modules')
+  getModules(@Request() req) {
+    const where: any = {};
+    // SUPER_ADMIN uniquement voit "Générer codes"
+    if (req.user.role !== 'SUPER_ADMIN') {
+      where.route = { not: '/super/codes' };
+    }
+    return this.prisma.module.findMany({ where, orderBy: { ordre: 'asc' } });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('users/:userId/modules')
+  async updateUserModules(@Param('userId') userId: string, @Body() data: { moduleIds: number[] }) {
+    const uid = parseInt(userId);
+    await this.prisma.userModule.deleteMany({ where: { utilisateurId: uid } });
+    if (data.moduleIds.length > 0) {
+      await this.prisma.userModule.createMany({
+        data: data.moduleIds.map(mid => ({ utilisateurId: uid, moduleId: mid })),
+      });
+    }
+    return { message: 'Modules mis à jour' };
+  }
 
   @Post('login')
   login(@Body() dto: LoginDto) {

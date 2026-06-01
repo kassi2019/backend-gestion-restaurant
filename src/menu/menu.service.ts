@@ -12,7 +12,12 @@ export class MenuService {
     });
   }
 
-  async createCategorie(data: { nom: string; ordreService: number; destination: string; restaurantId: number }) {
+  async createCategorie(data: {
+    nom: string;
+    ordreService: number;
+    destination: string;
+    restaurantId: number;
+  }) {
     return this.prisma.categorieMenu.create({
       data: {
         nom: data.nom,
@@ -80,7 +85,15 @@ export class MenuService {
     return categories;
   }
 
-  async updateMenu(menuId: number, data: { nom?: string; prix?: number; categorieId?: number; tempsPreparation?: number }) {
+  async updateMenu(
+    menuId: number,
+    data: {
+      nom?: string;
+      prix?: number;
+      categorieId?: number;
+      tempsPreparation?: number;
+    },
+  ) {
     return this.prisma.menu.update({
       where: { id: menuId },
       data,
@@ -98,15 +111,57 @@ export class MenuService {
     return this.prisma.menuVariant.findMany({ where: { menuId } });
   }
 
-  async addVariant(menuId: number, data: { nom: string; prix: number; image?: string }) {
-    return this.prisma.menuVariant.create({ data: { menuId, nom: data.nom, prix: data.prix, image: data.image } });
+  async addVariant(
+    menuId: number,
+    data: { nom: string; prix: number; image?: string },
+  ) {
+    return this.prisma.menuVariant.create({
+      data: { menuId, nom: data.nom, prix: data.prix, image: data.image },
+    });
   }
 
-  async updateVariant(variantId: number, data: { nom?: string; prix?: number; image?: string }) {
+  async updateVariant(
+    variantId: number,
+    data: { nom?: string; prix?: number; image?: string },
+  ) {
     return this.prisma.menuVariant.update({ where: { id: variantId }, data });
   }
 
   async deleteVariant(variantId: number) {
     return this.prisma.menuVariant.delete({ where: { id: variantId } });
+  }
+
+  // ---- Stock ----
+  async getStocks(restaurantId: number) {
+    return this.prisma.menu.findMany({
+      where: { restaurantId },
+      select: {
+        id: true,
+        nom: true,
+        stock: true,
+        disponibilite: true,
+        categorie: { select: { nom: true } },
+      },
+      orderBy: { stock: 'asc' },
+    });
+  }
+
+  async updateStock(menuId: number, stock: number) {
+    const data: any = { stock };
+    // Si on réapprovisionne (stock > 0), réactiver automatiquement
+    if (stock > 0) data.disponibilite = true;
+    // Si stock = 0, désactiver
+    if (stock === 0) data.disponibilite = false;
+
+    return this.prisma.menu.update({ where: { id: menuId }, data });
+  }
+
+  async decrementStock(menuId: number, quantite: number) {
+    const menu = await this.prisma.menu.findUnique({ where: { id: menuId } });
+    if (!menu || menu.stock === -1) return; // Illimité
+    const newStock = Math.max(0, menu.stock - quantite);
+    const data: any = { stock: newStock };
+    if (newStock === 0) data.disponibilite = false;
+    return this.prisma.menu.update({ where: { id: menuId }, data });
   }
 }

@@ -17,6 +17,7 @@ export class UsersService {
         statut: true,
         photo: true,
         dateCreation: true,
+        userModules: { include: { module: true } },
       },
     });
   }

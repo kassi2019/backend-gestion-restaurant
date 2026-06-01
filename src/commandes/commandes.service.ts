@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StatutCommande, StatutPreparation } from '@prisma/client';
 import { SocketGateway } from '../socket/socket.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { MenuService } from '../menu/menu.service';
 
 @Injectable()
 export class CommandesService {
@@ -10,6 +11,7 @@ export class CommandesService {
     private prisma: PrismaService,
     private socketGateway: SocketGateway,
     private notificationsService: NotificationsService,
+    private menuService: MenuService,
   ) {}
 
   async createFromClient(data: {
@@ -264,12 +266,18 @@ export class CommandesService {
       data: { statut },
     });
 
-    // Table → OCCUPEE quand le serveur valide
+    // Table → OCCUPEE quand le serveur valide + décrémenter le stock
     if (statut === 'VALIDEE' && commande?.tableId) {
       await this.prisma.tableRestaurant.update({
         where: { id: commande.tableId },
         data: { statut: 'OCCUPEE' },
       });
+
+      // Décrémenter le stock pour chaque article commandé
+      const details = await this.prisma.commandeDetail.findMany({ where: { commandeId } });
+      for (const d of details) {
+        try { await this.menuService.decrementStock(d.menuId, d.quantite); } catch {}
+      }
     }
 
     // Notifications DB + Socket

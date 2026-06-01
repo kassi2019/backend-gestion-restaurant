@@ -23,4 +23,7 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   photo?: string;
+
+  @IsOptional()
+  moduleIds?: number[];
 }
