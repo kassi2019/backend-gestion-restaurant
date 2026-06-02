@@ -15,6 +15,7 @@ import { ServeurTableModule } from './serveur-table/serveur-table.module';
 import { PaiementModule } from './paiement/paiement.module';
 import { StatistiquesModule } from './statistiques/statistiques.module';
 import { ClientModule } from './client/client.module';
+import { ReservationsModule } from './reservations/reservations.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -33,6 +34,7 @@ import { ClientModule } from './client/client.module';
     PaiementModule,
     StatistiquesModule,
     ClientModule,
+    ReservationsModule,
   ],
 })
 export class AppModule {}

@@ -7,7 +7,7 @@ import { Role } from '@prisma/client';
 
 @Controller('statistiques')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.MANAGER)
+@Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
 export class StatistiquesController {
   constructor(private statistiquesService: StatistiquesService) {}
 
@@ -64,5 +64,25 @@ export class StatistiquesController {
     @Query('fin') fin?: string,
   ) {
     return this.statistiquesService.getPerformanceCaissiers(req.user.restaurantId, debut, fin);
+  }
+
+  @Get('ventes-par-jour')
+  getVentesParJour(@Request() req, @Query('debut') debut?: string, @Query('fin') fin?: string) {
+    return this.statistiquesService.getVentesParJour(req.user.restaurantId, debut, fin);
+  }
+
+  @Get('ventes-par-mois')
+  getVentesParMois(@Request() req, @Query('debut') debut?: string, @Query('fin') fin?: string) {
+    return this.statistiquesService.getVentesParMois(req.user.restaurantId, debut, fin);
+  }
+
+  @Get('marge-brute')
+  getMargeBrute(@Request() req, @Query('debut') debut?: string, @Query('fin') fin?: string) {
+    return this.statistiquesService.getMargeBrute(req.user.restaurantId, debut, fin);
+  }
+
+  @Get('plats-moins-vendus')
+  getPlatsMoinsVendus(@Request() req, @Query('limit') limit?: string, @Query('debut') debut?: string, @Query('fin') fin?: string) {
+    return this.statistiquesService.getPlatsMoinsVendus(req.user.restaurantId, limit ? +limit : 10, debut, fin);
   }
 }

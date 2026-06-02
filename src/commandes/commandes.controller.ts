@@ -126,4 +126,47 @@ export class CommandesController {
   getStats(@Request() req) {
     return this.commandesService.getStats(req.user.restaurantId, req.user.id, req.user.role);
   }
+
+  // ---- LIVRAISON ----
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
+  @Get('livraisons')
+  getLivraisons(@Request() req) {
+    return this.commandesService.getLivraisons(req.user.restaurantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE, Role.LIVREUR)
+  @Get('livraisons/actives')
+  getLivraisonsActives(@Request() req) {
+    return this.commandesService.getLivraisonsActives(req.user.restaurantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
+  @Patch(':id/livraison')
+  assignerLivraison(@Param('id') id: string, @Body() data: { livreurId: number; adresse?: string; frais?: number }) {
+    return this.commandesService.assignerLivraison(+id, data.livreurId, data.adresse, data.frais);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.LIVREUR)
+  @Patch(':id/livraison/statut')
+  updateStatutLivraison(@Param('id') id: string, @Body() data: { statut: string }) {
+    return this.commandesService.updateStatutLivraison(+id, data.statut);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.LIVREUR)
+  @Get('livraisons/mes-livraisons')
+  getMesLivraisons(@Request() req) {
+    return this.commandesService.getLivraisonsLivreur(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
+  @Post(':id/notifier-pret')
+  notifierPret(@Param('id') id: string) {
+    return this.commandesService.notifierPret(+id);
+  }
 }

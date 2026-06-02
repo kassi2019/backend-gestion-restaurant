@@ -12,6 +12,33 @@ export class PaiementService {
     private notificationsService: NotificationsService,
   ) {}
 
+  async appliquerRemise(commandeId: number, data: { type: string; valeur: number; motif?: string }) {
+    const commande = await this.prisma.commande.findUnique({ where: { id: commandeId } });
+    if (!commande) throw new BadRequestException('Commande introuvable');
+    if (commande.statutPaiement === 'PAYEE') throw new BadRequestException('Commande déjà payée');
+
+    const montantInitial = Number(commande.montantTotal);
+    let montantFinal = montantInitial;
+    if (data.type === 'POURCENTAGE') {
+      montantFinal = montantInitial * (1 - data.valeur / 100);
+    } else if (data.type === 'MONTANT') {
+      montantFinal = montantInitial - data.valeur;
+    }
+    if (montantFinal < 0) montantFinal = 0;
+
+    await this.prisma.commande.update({
+      where: { id: commandeId },
+      data: {
+        remiseType: data.type as any,
+        remiseValeur: data.valeur,
+        remiseMotif: data.motif || null,
+        montantTotal: montantFinal,
+      },
+    });
+
+    return { message: 'Remise appliquée', montantFinal: montantFinal.toFixed(2), montantInitial: montantInitial.toFixed(2) };
+  }
+
   async payerCommande(commandeId: number, mode: ModePaiement, caissierId: number) {
     const commande = await this.prisma.commande.findUnique({
       where: { id: commandeId },
@@ -33,13 +60,16 @@ export class PaiementService {
       },
     });
 
-    // Générer une facture
+    // Générer une facture avec les infos de remise
     const numero = `FAC-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${commandeId.toString().padStart(4, '0')}`;
     const facture = await this.prisma.facture.create({
       data: {
         numero,
         commandeId,
         montantTotal: commande.montantTotal,
+        remiseType: commande.remiseType as any,
+        remiseValeur: commande.remiseValeur,
+        remiseMotif: commande.remiseMotif,
         modePaiement: mode,
         caissierId,
       },
@@ -159,6 +189,8 @@ export class PaiementService {
       total: Number(d.prix) * d.quantite,
     }));
 
+    const remise = facture.remiseType ? { type: facture.remiseType, valeur: Number(facture.remiseValeur || 0), motif: facture.remiseMotif || undefined } : null;
+
     return {
       numero: facture.numero,
       date: facture.dateFacture,
@@ -169,6 +201,7 @@ export class PaiementService {
       modePaiement: facture.modePaiement === 'ESPECES' ? 'Espèces' : facture.modePaiement === 'MOBILE_MONEY' ? 'Mobile Money' : 'Carte Bancaire',
       articles,
       total: Number(facture.montantTotal),
+      remise,
     };
   }
 

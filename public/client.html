@@ -514,33 +514,44 @@ async function viewMyOrders() {
     document.getElementById('ordersBadge').textContent = commandesCount;
     document.getElementById('ordersLink').classList.add('visible');
     let grandTotal = 0;
-    updateInvoiceButton(commandes); document.getElementById('historyContent').innerHTML = commandes.map((cmd, i) => {
+
+    // Grouper tous les articles de toutes les commandes
+    var allDetails = [];
+    var isComptoir = false;
+    var statutGlobal = 'PAYEE';
+    commandes.forEach(function(cmd) {
       grandTotal += Number(cmd.montantTotal);
-      var isComptoir = cmd.typeCommande === 'A_EMPORTER' || cmd.numeroCommande;
-      return `
-      <div style="background:#f9f9f9;border-radius:12px;padding:12px;margin-bottom:10px">
-        ${isComptoir ? '<div style="background:#E86B2A;color:white;padding:8px 12px;border-radius:8px;margin-bottom:8px;text-align:center"><span style="font-size:11px;opacity:0.8">Votre numéro</span><br><span style="font-size:22px;font-weight:900;letter-spacing:2px">' + (cmd.numeroCommande || 'CMD-' + String(cmd.id).padStart(4, '0')) + '</span><br><span style="font-size:10px;opacity:0.7">Présentez ce numéro à la caisse</span></div>' : ''}
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <strong>${isComptoir ? '📦 À emporter' : 'Commande #' + (commandes.length - i)}</strong>
-          <span style="font-size:12px;padding:4px 8px;border-radius:10px;background:${cmd.statut === 'EN_ATTENTE' ? '#FFF3E0' : cmd.statut === 'VALIDEE' ? '#E8F5E9' : cmd.statut === 'EN_PREPARATION' ? '#FFF8E1' : cmd.statut === 'PRETE' ? '#E3F2FD' : cmd.statut === 'SERVIE' ? '#F3E5F5' : '#EEE'};color:${cmd.statut === 'EN_ATTENTE' ? '#E65100' : cmd.statut === 'VALIDEE' ? '#2E7D32' : '#333'}">
-            ${cmd.statut === 'EN_ATTENTE' ? 'En attente' : cmd.statut === 'VALIDEE' ? 'Validée' : cmd.statut === 'EN_PREPARATION' ? 'En préparation' : cmd.statut === 'PRETE' ? 'Prête' : cmd.statut === 'SERVIE' ? 'Servie' : cmd.statut}
+      if (cmd.typeCommande === 'A_EMPORTER') isComptoir = true;
+      if (cmd.statut === 'EN_ATTENTE') statutGlobal = 'EN_ATTENTE';
+      else if (cmd.statut === 'VALIDEE' && statutGlobal !== 'EN_ATTENTE') statutGlobal = 'VALIDEE';
+      else if (cmd.statut === 'EN_PREPARATION' && statutGlobal !== 'EN_ATTENTE' && statutGlobal !== 'VALIDEE') statutGlobal = 'EN_PREPARATION';
+      else if (cmd.statut === 'PRETE' && statutGlobal !== 'EN_ATTENTE' && statutGlobal !== 'VALIDEE' && statutGlobal !== 'EN_PREPARATION') statutGlobal = 'PRETE';
+      (cmd.details || []).forEach(function(d) { allDetails.push(d); });
+    });
+
+    updateInvoiceButton(commandes);
+    var statutColors = { 'EN_ATTENTE': ['#FFF3E0','#E65100'], 'VALIDEE': ['#E8F5E9','#2E7D32'], 'EN_PREPARATION': ['#FFF8E1','#E65100'], 'PRETE': ['#E3F2FD','#1565C0'], 'SERVIE': ['#F3E5F5','#7B1FA2'] };
+    var sc = statutColors[statutGlobal] || ['#EEE','#333'];
+
+    document.getElementById('historyContent').innerHTML = `
+      <div style="background:#f9f9f9;border-radius:12px;padding:14px;margin-bottom:10px">
+        ${isComptoir ? '<div style="background:#E86B2A;color:white;padding:8px 12px;border-radius:8px;margin-bottom:10px;text-align:center"><span style="font-size:11px;opacity:0.8">Votre numéro</span><br><span style="font-size:22px;font-weight:900;letter-spacing:2px">' + (commandes[0].numeroCommande || 'CMD-' + String(commandes[0].id).padStart(4, '0')) + '</span><br><span style="font-size:10px;opacity:0.7">Présentez ce numéro à la caisse</span></div>' : ''}
+        ${commandes.length > 1 ? '<div style="font-size:10px;color:#999;margin-bottom:8px">Réfs: ' + commandes.map(function(c){ return 'CMD-'+String(c.id).padStart(4,'0'); }).join(' · ') + '</div>' : ''}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <strong>🛒 Votre commande (${commandes.length} ajout${commandes.length > 1 ? 's' : ''})</strong>
+          <span style="font-size:12px;padding:4px 8px;border-radius:10px;background:${sc[0]};color:${sc[1]}">
+            ${statutGlobal === 'EN_ATTENTE' ? 'En attente' : statutGlobal === 'VALIDEE' ? 'Validée' : statutGlobal === 'EN_PREPARATION' ? 'En préparation' : statutGlobal === 'PRETE' ? 'Prête' : statutGlobal === 'SERVIE' ? 'Servie' : statutGlobal}
           </span>
-          ${cmd.statut === 'EN_ATTENTE' ? '<button class="cancel-btn" onclick="event.stopPropagation();annulerCommande(' + cmd.id + ')" style="margin-left:8px">✕ Annuler</button>' : ''}
         </div>
-        ${cmd.details.map(d => `
-          <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">
-            <span>${d.quantite}x ${d.menu?.nom || 'Plat'}</span>
-            <span style="color:#666">${formatPrix(Number(d.prix) * d.quantite)}</span>
-            ${cmd.statut === 'EN_ATTENTE' ? '<button class="detail-cancel" onclick="event.stopPropagation();annulerDetail(' + d.id + ')" title="Retirer cet article">&times;</button>' : ''}
-          </div>
-        `).join('')}
-        <div style="border-top:1px solid #ddd;margin-top:6px;padding-top:6px;text-align:right;font-weight:700">
-          Total: ${formatPrix(cmd.montantTotal)}
+        ${allDetails.map(function(d) {
+          return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>' + d.quantite + 'x ' + (d.menu?.nom || 'Plat') + '</span><span style="color:#666">' + formatPrix(Number(d.prix) * d.quantite) + '</span></div>';
+        }).join('')}
+        <div style="border-top:1px solid #ddd;margin-top:8px;padding-top:8px;text-align:right;font-weight:700">
+          Total: ${formatPrix(grandTotal)}
         </div>
       </div>
-    `}).join('')
-    + `<div style="background:#FFF3E0;border-radius:12px;padding:14px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;border:2px solid #E86B2A">
-        <strong style="font-size:16px">Total global</strong>
+      <div style="background:#FFF3E0;border-radius:12px;padding:14px;display:flex;justify-content:space-between;align-items:center;border:2px solid #E86B2A">
+        <strong style="font-size:16px">Total à payer</strong>
         <span style="font-size:20px;font-weight:800;color:#E86B2A">${formatPrix(grandTotal)}</span>
       </div>`;
   } catch(e) {
@@ -639,6 +650,12 @@ function showToast(msg, isError = false) {
 loadMenu();
 restoreSession();
 connectSocketClient();
+
+// Rafraîchissement automatique toutes les 15 secondes
+setInterval(function() {
+  loadMenu();        // Mettre à jour la disponibilité des plats
+  restoreSession();  // Mettre à jour le statut des commandes
+}, 15000);
 </script>
 </body>
 </html>

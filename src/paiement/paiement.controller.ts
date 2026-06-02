@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards, Request, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtService } from '@nestjs/jwt';
 import { PaiementService } from './paiement.service';
@@ -20,6 +20,16 @@ export class PaiementController {
   @Get('a-payer')
   getCommandesAPayer(@Request() req) {
     return this.paiementService.getCommandesAPayer(req.user.restaurantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.CAISSIER)
+  @Patch('remise/:commandeId')
+  appliquerRemise(
+    @Param('commandeId') commandeId: string,
+    @Body() data: { type: string; valeur: number; motif?: string },
+  ) {
+    return this.paiementService.appliquerRemise(+commandeId, data);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

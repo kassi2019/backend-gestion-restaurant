@@ -30,6 +30,7 @@ export class AuthService {
             dateReouverture: true,
             typeAbonnement: true,
             dateFinAbonnement: true,
+            modeGestion: true,
           },
         },
       },
@@ -143,6 +144,7 @@ export class AuthService {
         restaurantTelephone: user.restaurant?.telephone || '',
         typeAbonnement: user.restaurant?.typeAbonnement || 'TRIAL',
         dateFinAbonnement: user.restaurant?.dateFinAbonnement || null,
+        modeGestion: user.restaurant?.modeGestion || 'RECEPTION',
         modules: userModules.map(um => ({ id: um.module.id, nom: um.module.nom, icon: um.module.icon, route: um.module.route })),
       },
     };

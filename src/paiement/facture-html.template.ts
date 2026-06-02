@@ -8,6 +8,7 @@ interface FactureData {
   modePaiement: string;
   articles: { quantite: number; nom: string; prix: number; total: number }[];
   total: number;
+  remise?: { type: string; valeur: number; motif?: string } | null;
 }
 
 export function genererFactureHTML(data: FactureData): string {
@@ -73,6 +74,12 @@ export function genererFactureHTML(data: FactureData): string {
       <td class="price">${a.prix.toFixed(2)} ${d}</td>
       <td class="price">${a.total.toFixed(2)} ${d}</td>
     </tr>`).join('')}
+    ${data.remise ? `
+    <tr><td colspan="4"><div class="divider"></div></td></tr>
+    <tr>
+      <td colspan="3" style="text-align:right;padding-right:8px;color:#e53e3e;font-weight:bold">Remise ${data.remise.type === 'POURCENTAGE' ? data.remise.valeur + '%' : data.remise.valeur.toFixed(2) + ' ' + d}${data.remise.motif ? ' (' + data.remise.motif + ')' : ''}</td>
+      <td class="price" style="color:#e53e3e">-${data.remise.type === 'POURCENTAGE' ? '' : ''}</td>
+    </tr>` : ''}
     <tr class="total-row">
       <td colspan="3" style="text-align:right;padding-right:8px">TOTAL</td>
       <td class="price">${data.total.toFixed(2)} ${d}</td>

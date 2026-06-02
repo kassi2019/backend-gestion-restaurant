@@ -400,8 +400,14 @@ export class CommandesService {
           statut, label, message,
         });
 
-      // Quand le serveur valide → notifier cuisine/bar en temps reel
-      if (statut === 'VALIDEE') {
+      // SERVEUR_VALIDE → notifier la réception
+      if (statut === 'SERVEUR_VALIDE') {
+        this.socketGateway.notifierReception(updated);
+        this.socketGateway.server.to('admin').emit('nouvelle_commande', updated);
+      }
+
+      // RECEPTION_VALIDE (ou VALIDEE legacy) → table OCCUPEE + notifier cuisine/bar
+      if (statut === 'RECEPTION_VALIDE' || statut === 'VALIDEE') {
         const cmd = await this.prisma.commande.findUnique({
           where: { id: commandeId },
           include: { details: { include: { menu: { include: { categorie: true } } } }, table: true },
@@ -883,5 +889,103 @@ export class CommandesService {
       payees: stats.PAYEE,
       annulees: stats.ANNULEE,
     };
+  }
+
+  // ---- LIVRAISON ----
+
+  async getLivraisons(restaurantId: number) {
+    return this.prisma.commande.findMany({
+      where: {
+        table: { restaurantId },
+        typeCommande: 'A_EMPORTER',
+        statutLivraison: { not: null },
+      },
+      include: {
+        table: { select: { numero: true } },
+        details: { include: { menu: { select: { nom: true } } } },
+        livreur: { select: { id: true, nom: true } },
+      },
+      orderBy: { dateCommande: 'desc' },
+    });
+  }
+
+  async getLivraisonsActives(restaurantId: number) {
+    return this.prisma.commande.findMany({
+      where: {
+        table: { restaurantId },
+        typeCommande: 'A_EMPORTER',
+        statutLivraison: { in: ['A_LIVRER', 'EN_COURS'] },
+      },
+      include: {
+        table: { select: { numero: true } },
+        details: { include: { menu: { select: { nom: true } } } },
+        livreur: { select: { id: true, nom: true } },
+      },
+      orderBy: { dateCommande: 'asc' },
+    });
+  }
+
+  async assignerLivraison(commandeId: number, livreurId: number, adresse?: string, frais?: number) {
+    const updateData: any = { statutLivraison: 'A_LIVRER', livreurId };
+    if (adresse) updateData.adresseLivraison = adresse;
+    if (frais !== undefined) updateData.fraisLivraison = frais;
+
+    return this.prisma.commande.update({
+      where: { id: commandeId },
+      data: updateData,
+      include: {
+        table: { select: { numero: true } },
+        details: { include: { menu: { select: { nom: true } } } },
+        livreur: { select: { id: true, nom: true } },
+      },
+    });
+  }
+
+  async updateStatutLivraison(commandeId: number, statut: string) {
+    return this.prisma.commande.update({
+      where: { id: commandeId },
+      data: { statutLivraison: statut as any },
+    });
+  }
+
+  async notifierPret(commandeId: number) {
+    const commande = await this.prisma.commande.findUnique({
+      where: { id: commandeId },
+      include: { table: { include: { restaurant: { select: { devise: true } } } }, serveur: true },
+    });
+    if (!commande) throw new Error('Commande introuvable');
+
+    const devise = commande.table?.restaurant?.devise || '€';
+    const tableNumero = commande.table?.numero || '?';
+    const message = `📢 Commande prête — Table ${tableNumero}`;
+
+    // Notifier le serveur
+    if (commande.serveurId) {
+      await this.notificationsService.create(commande.serveurId, message);
+      // Événement personnalisé "commande_prete" pour le serveur
+      this.socketGateway.server.to(`serveur:${commande.serveurId}`).emit('commande_prete', {
+        commandeId, tableNumero, message,
+        statut: 'PRETE', label: 'Commande prête',
+      });
+    }
+
+    // Notifier le client sur sa table
+    this.socketGateway.notifierClient(commande.tableId, {
+      commandeId, tableNumero, statut: 'PRETE',
+      label: 'Commande prête', message,
+    });
+
+    return { message: 'Serveur et client notifiés' };
+  }
+
+  async getLivraisonsLivreur(livreurId: number) {
+    return this.prisma.commande.findMany({
+      where: { livreurId },
+      include: {
+        table: { select: { numero: true } },
+        details: { include: { menu: { select: { nom: true } } } },
+      },
+      orderBy: { dateCommande: 'desc' },
+    });
   }
 }

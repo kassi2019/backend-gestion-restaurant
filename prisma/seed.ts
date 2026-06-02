@@ -234,6 +234,7 @@ async function main() {
     { nom: 'Générer codes', icon: '🔑', route: '/super/codes', ordre: 13 },
     { nom: 'Stock', icon: '📦', route: '/stock', ordre: 14 },
     { nom: 'Reception', icon: '📋', route: '/reception', ordre: 3 },
+    { nom: 'Réservations', icon: '🪑', route: '/reservations', ordre: 6 },
   ];
   for (const m of defaultModules) {
     await prisma.module.upsert({
@@ -247,12 +248,12 @@ async function main() {
   // Assigner les modules par défaut aux utilisateurs existants
   const roleModules: Record<string, string[]> = {
     SUPER_ADMIN: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Paramètres', 'Abonnement', 'Générer codes', 'Stock'],
-    ADMIN: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Paramètres', 'Abonnement', 'Stock'],
-    MANAGER: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats'],
+    ADMIN: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Paramètres', 'Abonnement', 'Stock', 'Réservations'],
+    MANAGER: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Réservations'],
     SERVEUR: ['Accueil', 'Tables', 'Commandes', 'Planning', 'Notifications'],
     CUISINE: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
     BAR: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
-    RECEPTIONNISTE: ['Accueil', 'Tables', 'Menu', 'Reception', 'Commandes', 'Planning', 'Notifications'],
+    RECEPTIONNISTE: ['Accueil', 'Tables', 'Menu', 'Reception', 'Commandes', 'Planning', 'Notifications', 'Réservations'],
     CAISSIER: ['Accueil', 'Planning', 'Caisse', 'Notifications'],
   };
   const allUsers = await prisma.utilisateur.findMany({ include: { userModules: true } });

@@ -20,6 +20,7 @@ model Restaurant {
   typeAbonnement  TypeAbonnement    @default(TRIAL) @map("type_abonnement")
   dateFinAbonnement DateTime?       @map("date_fin_abonnement")
   derniereNotifAbonnement DateTime? @map("derniere_notif_abonnement")
+  modeGestion     ModeGestion        @default(RECEPTION) @map("mode_gestion")
   historiqueAbonnement HistoriqueAbonnement[]
   utilisateurs    Utilisateur[]
   tables          TableRestaurant[]
@@ -27,6 +28,7 @@ model Restaurant {
   menus           Menu[]
   clotures        ClotureCaisse[]
   codesActivation CodeActivation[]
+  reservations    Reservation[]
 }
 
 enum TypeAbonnement {
@@ -38,6 +40,11 @@ enum TypeAbonnement {
 enum StatutRestaurant {
   OUVERT
   FERME
+}
+
+enum ModeGestion {
+  SERVEUR
+  RECEPTION
 }
 
 // ---- Utilisateurs (employés + admin) ----
@@ -61,6 +68,7 @@ model Utilisateur {
   serveurTables   ServeurTable[]          @relation("ServeurAssignations")
   sessionsClients SessionClient[]
   facturesCaissier Facture[]             @relation("CaissierFactures")
+  livraisons       Commande[]             @relation("LivraisonsLivreur")
   cloturesCaissier ClotureCaisse[]
   userModules     UserModule[]
 
@@ -76,6 +84,7 @@ enum Role {
   CUISINE
   BAR
   CAISSIER
+  LIVREUR
 }
 
 enum StatutUtilisateur {
@@ -100,6 +109,7 @@ model TableRestaurant {
   sessions        SessionClient[]
   commandes       Commande[]
   serveurTables   ServeurTable[]    @relation("TableAssignations")
+  reservations    Reservation[]
 
   @@map("tables_restaurant")
 }
@@ -142,6 +152,7 @@ model Menu {
   disponibilite     Boolean         @default(true)
   disponibleDemain  Int             @default(0) @map("disponible_demain")
   stock             Int             @default(-1)
+  coutMatiere       Decimal?        @default(0) @map("cout_matiere") @db.Decimal(10, 2)
   restaurantId      Int             @map("restaurant_id")
   restaurant        Restaurant      @relation(fields: [restaurantId], references: [id])
 
@@ -195,6 +206,9 @@ model Commande {
   session         SessionClient     @relation(fields: [sessionId], references: [id])
   statut          StatutCommande    @default(EN_ATTENTE)
   montantTotal    Decimal           @default(0) @map("montant_total") @db.Decimal(10, 2)
+  remiseType      RemiseType?       @map("remise_type")
+  remiseValeur    Decimal?          @map("remise_valeur") @db.Decimal(10, 2)
+  remiseMotif     String?           @map("remise_motif") @db.VarChar(255)
   dateCommande    DateTime          @default(now()) @map("date_commande")
   modePaiement    ModePaiement?     @map("mode_paiement")
   statutPaiement  StatutPaiement    @default(NON_PAYEE) @map("statut_paiement")
@@ -203,6 +217,11 @@ model Commande {
   caissier        Utilisateur?      @relation("CaissierPaiements", fields: [caissierId], references: [id])
   clientRef       String?           @map("client_ref") @db.VarChar(20)
   typeCommande    TypeCommande      @default(SUR_PLACE) @map("type_commande")
+  adresseLivraison String?          @map("adresse_livraison") @db.Text
+  fraisLivraison   Decimal?         @map("frais_livraison") @db.Decimal(10, 2)
+  statutLivraison  StatutLivraison? @map("statut_livraison")
+  livreurId        Int?             @map("livreur_id")
+  livreur          Utilisateur?     @relation("LivraisonsLivreur", fields: [livreurId], references: [id])
 
   details         CommandeDetail[]
   factures        Facture[]
@@ -218,11 +237,18 @@ enum TypeCommande {
 enum StatutCommande {
   EN_ATTENTE
   VALIDEE
+  SERVEUR_VALIDE
+  RECEPTION_VALIDE
   EN_PREPARATION
   PRETE
   SERVIE
   PAYEE
   ANNULEE
+}
+
+enum RemiseType {
+  POURCENTAGE
+  MONTANT
 }
 
 enum ModePaiement {
@@ -237,6 +263,13 @@ enum StatutPaiement {
   REMBOURSEE
 }
 
+enum StatutLivraison {
+  A_LIVRER
+  EN_COURS
+  LIVREE
+  ECHEC
+}
+
 // ---- Factures ----
 model Facture {
   id              Int             @id @default(autoincrement())
@@ -244,6 +277,9 @@ model Facture {
   commandeId      Int             @map("commande_id")
   commande        Commande        @relation(fields: [commandeId], references: [id])
   montantTotal    Decimal         @map("montant_total") @db.Decimal(10, 2)
+  remiseType      RemiseType?     @map("remise_type")
+  remiseValeur    Decimal?        @map("remise_valeur") @db.Decimal(10, 2)
+  remiseMotif     String?         @map("remise_motif") @db.VarChar(255)
   modePaiement    ModePaiement    @map("mode_paiement")
   dateFacture     DateTime        @default(now()) @map("date_facture")
   caissierId      Int             @map("caissier_id")
@@ -344,6 +380,32 @@ enum TypeCloture {
 }
 
 // ---- Modules dynamiques par utilisateur ----
+// ---- Réservations ----
+model Reservation {
+  id              Int                @id @default(autoincrement())
+  nomClient       String             @map("nom_client") @db.VarChar(100)
+  telephone       String             @db.VarChar(30)
+  nbPersonnes     Int                @default(1) @map("nb_personnes")
+  dateReservation  DateTime           @map("date_reservation")
+  tableId         Int?
+  table           TableRestaurant?   @relation(fields: [tableId], references: [id])
+  statut          StatutReservation  @default(EN_ATTENTE)
+  notes           String?            @db.Text
+  restaurantId    Int                @map("restaurant_id")
+  restaurant      Restaurant         @relation(fields: [restaurantId], references: [id])
+  dateCreation    DateTime           @default(now()) @map("date_creation")
+
+  @@map("reservations")
+}
+
+enum StatutReservation {
+  EN_ATTENTE
+  CONFIRMEE
+  ANNULEE
+  HONOREE
+}
+
+// ---- Modules dynamiques ----
 model Module {
   id        Int          @id @default(autoincrement())
   nom       String       @db.VarChar(100)

@@ -2,9 +2,29 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role, StatutUtilisateur } from '@prisma/client';
 
+const roleModules: Record<string, string[]> = {
+  SUPER_ADMIN: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Paramètres', 'Abonnement', 'Générer codes', 'Stock'],
+  ADMIN: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Paramètres', 'Abonnement', 'Stock', 'Réservations'],
+  MANAGER: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Réservations'],
+  SERVEUR: ['Accueil', 'Tables', 'Commandes', 'Planning', 'Notifications'],
+  CUISINE: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
+  BAR: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
+  RECEPTIONNISTE: ['Accueil', 'Tables', 'Menu', 'Reception', 'Commandes', 'Planning', 'Notifications', 'Réservations'],
+  CAISSIER: ['Accueil', 'Planning', 'Caisse', 'Notifications'],
+};
+
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
+
+  private async reassignModules(userId: number, role: string) {
+    const noms = roleModules[role] || ['Accueil', 'Notifications'];
+    const modules = await this.prisma.module.findMany({ where: { nom: { in: noms } } });
+    await this.prisma.userModule.deleteMany({ where: { utilisateurId: userId } });
+    for (const m of modules) {
+      await this.prisma.userModule.create({ data: { utilisateurId: userId, moduleId: m.id } });
+    }
+  }
 
   async findAll(restaurantId: number) {
     return this.prisma.utilisateur.findMany({
@@ -60,7 +80,7 @@ export class UsersService {
       const bcrypt = require('bcryptjs');
       updateData.mot_de_passe = await bcrypt.hash(data.mot_de_passe, 10);
     }
-    return this.prisma.utilisateur.update({
+    const updated = await this.prisma.utilisateur.update({
       where: { id: userId },
       data: updateData,
       select: {
@@ -72,6 +92,13 @@ export class UsersService {
         photo: true,
       },
     });
+
+    // Si le rôle a changé, réassigner les modules
+    if (data.role) {
+      await this.reassignModules(userId, data.role);
+    }
+
+    return updated;
   }
 
   async supprimer(userId: number) {
