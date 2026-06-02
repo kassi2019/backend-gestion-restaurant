@@ -94,7 +94,7 @@ export class PaiementService {
       where: {
         table: { restaurantId },
         statutPaiement: 'NON_PAYEE',
-        statut: { in: ['SERVIE', 'PRETE'] },
+        statut: { notIn: ['EN_ATTENTE', 'ANNULEE', 'PAYEE'] },
       },
       include: {
         table: { select: { numero: true } },

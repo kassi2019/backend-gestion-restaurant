@@ -98,6 +98,21 @@ async function main() {
   });
   console.log('Bar créé:', bar.nom, '- Tél: 0990000003 / Mot de passe: 123456');
 
+  // Create receptionniste
+  const receptionniste = await prisma.utilisateur.upsert({
+    where: { telephone: '0990000004' },
+    update: {},
+    create: {
+      nom: 'Alice Réception',
+      telephone: '0990000004',
+      mot_de_passe: hashedPassword,
+      role: 'RECEPTIONNISTE',
+      statut: 'ACTIF',
+      restaurantId: restaurant.id,
+    },
+  });
+  console.log('Réceptionniste créée:', receptionniste.nom, '- Tél: 0990000004 / Mot de passe: 123456');
+
   // Create categories
   const categoriesData = [
     { nom: 'Boissons', ordreService: 1, destination: 'BAR' as const },
@@ -218,6 +233,7 @@ async function main() {
     { nom: 'Abonnement', icon: '⭐', route: '/abonnement', ordre: 12 },
     { nom: 'Générer codes', icon: '🔑', route: '/super/codes', ordre: 13 },
     { nom: 'Stock', icon: '📦', route: '/stock', ordre: 14 },
+    { nom: 'Reception', icon: '📋', route: '/reception', ordre: 3 },
   ];
   for (const m of defaultModules) {
     await prisma.module.upsert({
@@ -236,6 +252,7 @@ async function main() {
     SERVEUR: ['Accueil', 'Tables', 'Commandes', 'Planning', 'Notifications'],
     CUISINE: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
     BAR: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
+    RECEPTIONNISTE: ['Accueil', 'Tables', 'Menu', 'Reception', 'Commandes', 'Planning', 'Notifications'],
     CAISSIER: ['Accueil', 'Planning', 'Caisse', 'Notifications'],
   };
   const allUsers = await prisma.utilisateur.findMany({ include: { userModules: true } });
@@ -256,6 +273,7 @@ async function main() {
   console.log('  Serveur:     0990000001 / 123456');
   console.log('  Cuisine:     0990000002 / 123456');
   console.log('  Bar:         0990000003 / 123456');
+  console.log('  Réception:   0990000004 / 123456');
   console.log('Code activation test: RESTO-TEST-CODE (30 jours)');
 }
 

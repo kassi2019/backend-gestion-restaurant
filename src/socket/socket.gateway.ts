@@ -30,6 +30,9 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const key = `${payload.role}_${payload.userId}`;
     this.connectedUsers.set(client.id, key);
 
+    // Room personnelle pour les notifications individuelles
+    client.join(`user:${payload.userId}`);
+
     switch (payload.role) {
       case 'SERVEUR':
         client.join(`serveur:${payload.userId}`);
@@ -39,6 +42,10 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
         break;
       case 'BAR':
         client.join('bar');
+        break;
+      case 'RECEPTIONNISTE':
+        client.join('reception');
+        client.join('admin');
         break;
       case 'MANAGER':
       case 'ADMIN':
@@ -56,6 +63,11 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Notifier un serveur d'une nouvelle commande
   notifierNouvelleCommande(serveurId: number, commande: any) {
     this.server.to(`serveur:${serveurId}`).emit('nouvelle_commande', commande);
+  }
+
+  // Notifier la reception
+  notifierReception(commande: any) {
+    this.server.to('reception').emit('nouvelle_commande', commande);
   }
 
   // Notifier la cuisine
@@ -80,11 +92,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // Notifier un utilisateur specifique (pour notifications DB)
   notifierUtilisateur(userId: number, event: string, data: any) {
-    this.server.to(`serveur:${userId}`).emit(event, data);
-    // Also notify admins for important events
-    if (event === 'notification_user') {
-      this.server.to('admin').emit('notification_admin', data);
-    }
+    this.server.to(`user:${userId}`).emit(event, data);
   }
 
   // Notifier une demande de facture au serveur et a la caisse

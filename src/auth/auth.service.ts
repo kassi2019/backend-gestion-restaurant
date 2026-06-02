@@ -23,6 +23,7 @@ export class AuthService {
         restaurant: {
           select: {
             nom: true,
+            logo: true,
             devise: true,
             telephone: true,
             statut: true,
@@ -138,6 +139,7 @@ export class AuthService {
         restaurantId: user.restaurantId,
         devise: user.restaurant?.devise || '€',
         restaurantNom: user.restaurant?.nom || '',
+        restaurantLogo: user.restaurant?.logo || '',
         restaurantTelephone: user.restaurant?.telephone || '',
         typeAbonnement: user.restaurant?.typeAbonnement || 'TRIAL',
         dateFinAbonnement: user.restaurant?.dateFinAbonnement || null,

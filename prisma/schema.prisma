@@ -11,6 +11,7 @@ datasource db {
 model Restaurant {
   id              Int               @id @default(autoincrement())
   nom             String            @db.VarChar(255)
+  logo            String?           @db.VarChar(500)
   adresse         String            @db.Text
   devise          String            @default("€") @db.VarChar(10)
   telephone       String?           @db.VarChar(30)
@@ -70,6 +71,7 @@ enum Role {
   SUPER_ADMIN
   ADMIN
   MANAGER
+  RECEPTIONNISTE
   SERVEUR
   CUISINE
   BAR

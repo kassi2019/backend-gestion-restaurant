@@ -90,15 +90,13 @@ export class ActivationService {
 
     const restaurantId = utilisateur.restaurantId;
 
-    // Récupérer tous les codes non utilisés, les déchiffrer et comparer
-    const codesNonUtilises = await this.prisma.codeActivation.findMany({
-      where: { estUtilise: false },
-    });
-
-    let codeTrouve: any = null;
+    // Récupérer tous les codes, les déchiffrer et comparer
+    const tousLesCodes = await this.prisma.codeActivation.findMany();
     const codeNettoye = codeSaisi.toUpperCase().trim();
 
-    for (const c of codesNonUtilises) {
+    let codeTrouve: any = null;
+
+    for (const c of tousLesCodes) {
       try {
         const decrypted = decrypt(c.codeEncrypted);
         if (decrypted === codeNettoye) {
@@ -112,6 +110,10 @@ export class ActivationService {
 
     if (!codeTrouve) {
       throw new BadRequestException('Code invalide');
+    }
+
+    if (codeTrouve.estUtilise) {
+      throw new BadRequestException('Ce code est déjà utilisé');
     }
 
     const restaurant = await this.prisma.restaurant.findUnique({

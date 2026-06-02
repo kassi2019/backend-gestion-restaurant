@@ -43,7 +43,15 @@ export class UsersService {
     });
   }
 
-  async update(userId: number, data: { nom?: string; telephone?: string; role?: Role; mot_de_passe?: string }) {
+  async update(
+    userId: number,
+    data: {
+      nom?: string;
+      telephone?: string;
+      role?: Role;
+      mot_de_passe?: string;
+    },
+  ) {
     const updateData: any = {};
     if (data.nom) updateData.nom = data.nom;
     if (data.telephone) updateData.telephone = data.telephone;
@@ -55,7 +63,14 @@ export class UsersService {
     return this.prisma.utilisateur.update({
       where: { id: userId },
       data: updateData,
-      select: { id: true, nom: true, telephone: true, role: true, statut: true, photo: true },
+      select: {
+        id: true,
+        nom: true,
+        telephone: true,
+        role: true,
+        statut: true,
+        photo: true,
+      },
     });
   }
 

@@ -13,7 +13,7 @@ import { Role } from '@prisma/client';
 export class ServeurTableController {
   constructor(private serveurTableService: ServeurTableService) {}
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
   @Get()
   findAll(@Request() req) {
     return this.serveurTableService.findAll(req.user.restaurantId);
@@ -25,31 +25,31 @@ export class ServeurTableController {
     return this.serveurTableService.findByServeur(req.user.id);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
   @Get('table/:tableId')
   findByTable(@Param('tableId') tableId: string) {
     return this.serveurTableService.findByTable(+tableId);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
   @Post()
   assign(@Body() data: { utilisateurId: number; tableId: number }) {
     return this.serveurTableService.assign(data.utilisateurId, data.tableId);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
   @Post('bulk')
   assignBulk(@Body() data: { utilisateurId: number; tableIds: number[] }) {
     return this.serveurTableService.assignBulk(data.utilisateurId, data.tableIds);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
   @Delete(':tableId')
   unassign(@Param('tableId') tableId: string) {
     return this.serveurTableService.unassign(+tableId);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
   @Patch('reassign')
   reassign(
     @Body() data: { fromServeurId: number; toServeurId: number; tableId?: number },

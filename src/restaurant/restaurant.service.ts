@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class RestaurantService {
   constructor(private prisma: PrismaService) {}
 
-  async create(data: { nom: string; adresse: string; telephone?: string; devise?: string }) {
+  async create(data: { nom: string; adresse: string; telephone?: string; devise?: string; logo?: string }) {
     return this.prisma.restaurant.create({ data });
   }
 
@@ -33,12 +33,13 @@ export class RestaurantService {
     return resto;
   }
 
-  async update(id: number, data: { nom?: string; adresse?: string; devise?: string; telephone?: string; statut?: string; dateReouverture?: string }) {
+  async update(id: number, data: { nom?: string; adresse?: string; devise?: string; telephone?: string; statut?: string; dateReouverture?: string; logo?: string }) {
     const updateData: any = {};
     if (data.nom !== undefined) updateData.nom = data.nom;
     if (data.adresse !== undefined) updateData.adresse = data.adresse;
     if (data.devise !== undefined) updateData.devise = data.devise;
     if (data.telephone !== undefined) updateData.telephone = data.telephone;
+    if (data.logo !== undefined) updateData.logo = data.logo;
     if (data.statut !== undefined) updateData.statut = data.statut as any;
     if (data.dateReouverture !== undefined) updateData.dateReouverture = new Date(data.dateReouverture);
     return this.prisma.restaurant.update({

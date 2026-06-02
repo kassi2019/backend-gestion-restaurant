@@ -1,4 +1,14 @@
-import { Controller, Get, Patch, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -16,7 +26,7 @@ export class UsersController {
     return this.usersService.findAll(req.user.restaurantId);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
   @Get('role/:role')
   findByRole(@Request() req, @Param('role') role: Role) {
     return this.usersService.findByRole(req.user.restaurantId, role);
@@ -24,13 +34,25 @@ export class UsersController {
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() data: { nom?: string; telephone?: string; role?: Role; mot_de_passe?: string }) {
+  update(
+    @Param('id') id: string,
+    @Body()
+    data: {
+      nom?: string;
+      telephone?: string;
+      role?: Role;
+      mot_de_passe?: string;
+    },
+  ) {
     return this.usersService.update(+id, data);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Patch(':id/statut')
-  updateStatut(@Param('id') id: string, @Query('statut') statut: StatutUtilisateur) {
+  updateStatut(
+    @Param('id') id: string,
+    @Query('statut') statut: StatutUtilisateur,
+  ) {
     return this.usersService.updateStatut(+id, statut);
   }
 

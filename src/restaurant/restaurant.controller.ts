@@ -1,4 +1,7 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
 import { RestaurantService } from './restaurant.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -37,7 +40,25 @@ export class RestaurantController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() data: { nom?: string; adresse?: string; devise?: string; telephone?: string; statut?: string; dateReouverture?: string }) {
+  update(@Param('id') id: string, @Body() data: { nom?: string; adresse?: string; devise?: string; telephone?: string; statut?: string; dateReouverture?: string; logo?: string }) {
     return this.restaurantService.update(+id, data);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @Post(':id/logo')
+  @UseInterceptors(FileInterceptor('image', {
+    storage: diskStorage({
+      destination: join(process.cwd(), 'uploads'),
+      filename: (_req, file, cb) => {
+        const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, 'resto-' + unique + extname(file.originalname));
+      },
+    }),
+  }))
+  async uploadLogo(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+    const logoUrl = `/uploads/${file.filename}`;
+    await this.restaurantService.update(+id, { logo: logoUrl } as any);
+    return { logoUrl, filename: file.filename };
   }
 }

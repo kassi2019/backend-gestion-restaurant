@@ -14,6 +14,13 @@ export class CommandesController {
     return this.commandesService.createFromClient(data);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
+  @Post()
+  create(@Body() data: { tableId: number; serveurId: number; details: { menuId: number; quantite: number; prix: number }[]; typeCommande?: string }, @Request() req) {
+    return this.commandesService.create({ ...data, restaurantId: req.user.restaurantId });
+  }
+
   @Post('demande-facture')
   demandeFacture(@Body() data: { tableId: number; sessionKey?: string }) {
     return this.commandesService.demandeFacture(data);
@@ -30,7 +37,7 @@ export class CommandesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
   @Get()
   findAll(@Request() req) {
     return this.commandesService.findAllByRestaurant(req.user.restaurantId);
@@ -58,7 +65,14 @@ export class CommandesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR, Role.CUISINE, Role.BAR)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
+  @Patch(':id/assign-serveur')
+  assignServeur(@Param('id') id: string, @Body() data: { serveurId: number }) {
+    return this.commandesService.assignServeur(+id, data.serveurId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR, Role.CUISINE, Role.BAR, Role.RECEPTIONNISTE)
   @Patch(':id/statut')
   updateStatut(@Param('id') id: string, @Body() data: { statut: StatutCommande }) {
     return this.commandesService.updateStatut(+id, data.statut);
@@ -84,7 +98,7 @@ export class CommandesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR, Role.RECEPTIONNISTE)
   @Get('table/:tableId')
   findByTable(@Param('tableId') tableId: string) {
     return this.commandesService.findByTable(+tableId);
@@ -107,7 +121,7 @@ export class CommandesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR, Role.CUISINE, Role.BAR)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR, Role.CUISINE, Role.BAR, Role.RECEPTIONNISTE)
   @Get('stats')
   getStats(@Request() req) {
     return this.commandesService.getStats(req.user.restaurantId, req.user.id, req.user.role);
