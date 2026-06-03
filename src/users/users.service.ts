@@ -70,12 +70,14 @@ export class UsersService {
       telephone?: string;
       role?: Role;
       mot_de_passe?: string;
+      joursRepos?: string;
     },
   ) {
     const updateData: any = {};
     if (data.nom) updateData.nom = data.nom;
     if (data.telephone) updateData.telephone = data.telephone;
     if (data.role) updateData.role = data.role;
+    if (data.joursRepos !== undefined) updateData.joursRepos = data.joursRepos;
     if (data.mot_de_passe) {
       const bcrypt = require('bcryptjs');
       updateData.mot_de_passe = await bcrypt.hash(data.mot_de_passe, 10);

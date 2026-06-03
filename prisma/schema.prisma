@@ -56,6 +56,7 @@ model Utilisateur {
   role            Role              @default(SERVEUR)
   statut          StatutUtilisateur  @default(ACTIF)
   photo           String?           @db.Text
+  joursRepos      String?           @default("") @map("jours_repos") @db.VarChar(30)
   restaurantId    Int               @map("restaurant_id")
   restaurant      Restaurant        @relation(fields: [restaurantId], references: [id])
   dateCreation    DateTime          @default(now()) @map("date_creation")

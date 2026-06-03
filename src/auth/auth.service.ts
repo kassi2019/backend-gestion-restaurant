@@ -174,11 +174,31 @@ export class AuthService {
       },
     });
 
-    // Assigner les modules si fournis
+    // Assigner les modules si fournis, sinon auto-assigner selon le rôle
     if (dto.moduleIds?.length > 0) {
       await this.prisma.userModule.createMany({
         data: dto.moduleIds.map(mid => ({ utilisateurId: user.id, moduleId: mid })),
       });
+    } else {
+      // Fallback: assigner les modules par défaut selon le rôle
+      const roleModules: Record<string, string[]> = {
+        SUPER_ADMIN: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Paramètres', 'Abonnement', 'Générer codes', 'Stock'],
+        ADMIN: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Paramètres', 'Abonnement', 'Stock', 'Réservations'],
+        MANAGER: ['Accueil', 'Tables', 'Affectation', 'Commandes', 'Menu', 'Planning', 'Caisse', 'Users', 'Notifications', 'Stats', 'Réservations'],
+        SERVEUR: ['Accueil', 'Tables', 'Commandes', 'Planning', 'Notifications'],
+        CUISINE: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
+        BAR: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
+        RECEPTIONNISTE: ['Accueil', 'Tables', 'Menu', 'Reception', 'Commandes', 'Planning', 'Notifications', 'Réservations'],
+        CAISSIER: ['Accueil', 'Planning', 'Caisse', 'Notifications'],
+        LIVREUR: ['Accueil', 'Livraisons', 'Notifications'],
+      };
+      const noms = roleModules[dto.role] || ['Accueil', 'Notifications'];
+      const modules = await this.prisma.module.findMany({ where: { nom: { in: noms } } });
+      if (modules.length > 0) {
+        await this.prisma.userModule.createMany({
+          data: modules.map(m => ({ utilisateurId: user.id, moduleId: m.id })),
+        });
+      }
     }
 
     return { message: 'Utilisateur créé avec succès', userId: user.id };
