@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request, UseInterceptors, UploadedFile, Res, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Request, UseInterceptors, UploadedFile, Res, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
@@ -14,8 +14,8 @@ export class MenuController {
   constructor(private menuService: MenuService) {}
 
   @Get('public/:restaurantId')
-  getMenuPublic(@Param('restaurantId') restaurantId: string) {
-    return this.menuService.getMenuPublic(+restaurantId);
+  getMenuPublic(@Param('restaurantId') restaurantId: string, @Query('tableId') tableId?: string) {
+    return this.menuService.getMenuPublic(+restaurantId, tableId ? +tableId : undefined);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

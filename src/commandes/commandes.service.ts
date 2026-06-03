@@ -861,8 +861,8 @@ export class CommandesService {
     });
 
     const stats: Record<string, number> = {
-      EN_ATTENTE: 0, VALIDEE: 0, EN_PREPARATION: 0,
-      PRETE: 0, SERVIE: 0, PAYEE: 0, ANNULEE: 0,
+      EN_ATTENTE: 0, VALIDEE: 0, SERVEUR_VALIDE: 0, RECEPTION_VALIDE: 0,
+      EN_PREPARATION: 0, PRETE: 0, PAYEE: 0, ANNULEE: 0,
     };
 
     for (const c of commandes) {
@@ -882,12 +882,10 @@ export class CommandesService {
       totalTables,
       totalCommandes: commandes.length,
       enAttente: stats.EN_ATTENTE,
-      validees: stats.VALIDEE,
-      enPreparation: stats.EN_PREPARATION,
-      pretes: stats.PRETE,
-      servies: stats.SERVIE,
-      payees: stats.PAYEE,
-      annulees: stats.ANNULEE,
+      serveurValide: (stats.SERVEUR_VALIDE || 0) + (stats.VALIDEE || 0),
+      receptionValide: stats.RECEPTION_VALIDE || 0,
+      payees: stats.PAYEE || 0,
+      annulees: stats.ANNULEE || 0,
     };
   }
 

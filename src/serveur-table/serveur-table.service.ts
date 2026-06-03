@@ -22,7 +22,7 @@ export class ServeurTableService {
     return this.prisma.serveurTable.findMany({
       where: { utilisateurId, statut: 'ACTIF' },
       include: {
-        table: true,
+        table: { include: { zoneTarif: { select: { nom: true, coefficient: true } } } },
       },
     });
   }

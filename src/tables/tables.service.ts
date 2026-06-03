@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StatutTable } from '@prisma/client';
 
@@ -12,7 +12,7 @@ export class TablesService {
 
     return this.prisma.tableRestaurant.findMany({
       where: { restaurantId },
-      include: { serveur: { select: { id: true, nom: true } } },
+      include: { serveur: { select: { id: true, nom: true } }, zoneTarif: { select: { nom: true, coefficient: true } } },
     });
   }
 
@@ -62,7 +62,15 @@ export class TablesService {
     }
   }
 
-  async create(data: { numero: string; zone: string; restaurantId: number }) {
+  async create(data: { numero: string; zone: string; restaurantId: number; zoneId?: number }) {
+    // Vérifier si le numéro existe déjà
+    const existant = await this.prisma.tableRestaurant.findFirst({
+      where: { numero: data.numero, restaurantId: data.restaurantId },
+    });
+    if (existant) {
+      throw new BadRequestException('Ce numéro de table existe déjà');
+    }
+
     // Transaction : créer puis mettre à jour le QR code avec l'ID généré
     return this.prisma.$transaction(async (tx) => {
       const table = await tx.tableRestaurant.create({
@@ -70,6 +78,7 @@ export class TablesService {
           numero: data.numero,
           zone: data.zone,
           restaurantId: data.restaurantId,
+          zoneId: data.zoneId || null,
           qrCode: '',
         },
       });
@@ -111,7 +120,17 @@ export class TablesService {
     });
   }
 
-  async update(tableId: number, data: { numero?: string; zone?: string }) {
+  async update(tableId: number, data: { numero?: string; zone?: string; zoneId?: number }) {
+    // Vérifier si le nouveau numéro existe déjà (sur une autre table)
+    if (data.numero) {
+      const existant = await this.prisma.tableRestaurant.findFirst({
+        where: { numero: data.numero, id: { not: tableId }, restaurantId: (await this.prisma.tableRestaurant.findUnique({ where: { id: tableId }, select: { restaurantId: true } }))?.restaurantId },
+      });
+      if (existant) {
+        throw new BadRequestException('Ce numéro de table existe déjà');
+      }
+    }
+
     return this.prisma.tableRestaurant.update({
       where: { id: tableId },
       data,

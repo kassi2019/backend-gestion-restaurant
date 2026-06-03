@@ -21,6 +21,8 @@ model Restaurant {
   dateFinAbonnement DateTime?       @map("date_fin_abonnement")
   derniereNotifAbonnement DateTime? @map("derniere_notif_abonnement")
   modeGestion     ModeGestion        @default(RECEPTION) @map("mode_gestion")
+  zonesTarifaires String?            @map("zones_tarifaires") @db.Text
+  zones           Zone[]
   historiqueAbonnement HistoriqueAbonnement[]
   utilisateurs    Utilisateur[]
   tables          TableRestaurant[]
@@ -95,11 +97,25 @@ enum StatutUtilisateur {
   SUSPENDU
 }
 
+// ---- Zones tarifaires ----
+model Zone {
+  id            Int              @id @default(autoincrement())
+  nom           String           @db.VarChar(100)
+  coefficient   Decimal          @default(1.0) @db.Decimal(4, 2)
+  restaurantId  Int              @map("restaurant_id")
+  restaurant    Restaurant       @relation(fields: [restaurantId], references: [id])
+  tables        TableRestaurant[]
+
+  @@map("zones_tarifaires")
+}
+
 // ---- Tables du restaurant ----
 model TableRestaurant {
   id              Int               @id @default(autoincrement())
   numero          String            @db.VarChar(50)
   zone            String            @db.VarChar(100)
+  zoneId          Int?              @map("zone_id")
+  zoneTarif       Zone?             @relation(fields: [zoneId], references: [id])
   statut          StatutTable       @default(LIBRE)
   serveurId       Int?              @map("serveur_id")
   serveur         Utilisateur?      @relation("ServeurTables", fields: [serveurId], references: [id])

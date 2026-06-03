@@ -33,7 +33,7 @@ export class RestaurantService {
     return resto;
   }
 
-  async update(id: number, data: { nom?: string; adresse?: string; devise?: string; telephone?: string; statut?: string; dateReouverture?: string; logo?: string; modeGestion?: string }) {
+  async update(id: number, data: { nom?: string; adresse?: string; devise?: string; telephone?: string; statut?: string; dateReouverture?: string; logo?: string; modeGestion?: string; zonesTarifaires?: string }) {
     const updateData: any = {};
     if (data.nom !== undefined) updateData.nom = data.nom;
     if (data.adresse !== undefined) updateData.adresse = data.adresse;
@@ -41,6 +41,7 @@ export class RestaurantService {
     if (data.telephone !== undefined) updateData.telephone = data.telephone;
     if (data.logo !== undefined) updateData.logo = data.logo;
     if (data.modeGestion !== undefined) updateData.modeGestion = data.modeGestion;
+    if (data.zonesTarifaires !== undefined) updateData.zonesTarifaires = data.zonesTarifaires;
     if (data.statut !== undefined) updateData.statut = data.statut as any;
     if (data.dateReouverture !== undefined) updateData.dateReouverture = new Date(data.dateReouverture);
     return this.prisma.restaurant.update({

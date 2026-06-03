@@ -70,7 +70,23 @@ export class MenuService {
     });
   }
 
-  async getMenuPublic(restaurantId: number) {
+  async getMenuPublic(restaurantId: number, tableId?: number) {
+    let coefficient = 1.0;
+    let zoneNom = '';
+
+    if (tableId) {
+      const table = await this.prisma.tableRestaurant.findUnique({
+        where: { id: tableId },
+        include: { zoneTarif: { select: { nom: true, coefficient: true } } },
+      });
+      if (table?.zoneTarif) {
+        zoneNom = table.zoneTarif.nom;
+        coefficient = Number(table.zoneTarif.coefficient) || 1.0;
+      } else if (table?.zone) {
+        zoneNom = table.zone; // fallback sur l'ancien champ zone
+      }
+    }
+
     const categories = await this.prisma.categorieMenu.findMany({
       where: { restaurantId },
       orderBy: { ordreService: 'asc' },
@@ -82,7 +98,28 @@ export class MenuService {
         },
       },
     });
-    return categories;
+
+    // Appliquer le coefficient
+    if (coefficient !== 1.0) {
+      for (const cat of categories) {
+        for (const menu of cat.menus) {
+          (menu as any).prixOriginal = Number(menu.prix);
+          menu.prix = Number(menu.prix) * coefficient as any;
+          for (const v of menu.variants) {
+            (v as any).prixOriginal = Number(v.prix);
+            v.prix = Number(v.prix) * coefficient as any;
+          }
+        }
+      }
+    }
+
+    let tableNumero = '';
+    if (tableId) {
+      const t = await this.prisma.tableRestaurant.findUnique({ where: { id: tableId }, select: { numero: true } });
+      tableNumero = t?.numero || '';
+    }
+
+    return { categories, zone: zoneNom, coefficient, tableNumero };
   }
 
   async updateMenu(
