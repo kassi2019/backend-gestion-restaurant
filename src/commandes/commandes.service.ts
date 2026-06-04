@@ -889,6 +889,57 @@ export class CommandesService {
     };
   }
 
+  // ---- MODE CAISSE : créer et payer directement ----
+  async createAndPay(data: {
+    tableId: number; details: { menuId: number; quantite: number }[];
+    modePaiement: string; caissierId: number; restaurantId: number;
+  }) {
+    // 1. Créer la commande avec statut PAYEE
+    const table = await this.prisma.tableRestaurant.findUnique({ where: { id: data.tableId } });
+    if (!table) throw new Error('Table introuvable');
+
+    // Créer une session
+    const key = `CAISSE-${Date.now().toString(36).toUpperCase()}`;
+    const session = await this.prisma.sessionClient.create({
+      data: { sessionKey: key, tableId: data.tableId, statut: 'ACTIVE' },
+    });
+
+    let montantTotal = 0;
+    const detailsData = [];
+    for (const article of data.details) {
+      const menu = await this.prisma.menu.findUnique({ where: { id: article.menuId } });
+      if (menu) {
+        const sousTotal = Number(menu.prix) * article.quantite;
+        montantTotal += sousTotal;
+        detailsData.push({ menuId: article.menuId, quantite: article.quantite, prix: menu.prix });
+      }
+    }
+
+    const commande = await this.prisma.commande.create({
+      data: {
+        tableId: data.tableId,
+        sessionId: session.id,
+        montantTotal,
+        typeCommande: 'A_EMPORTER',
+        statut: 'PAYEE',
+        statutPaiement: 'PAYEE',
+        modePaiement: data.modePaiement as any,
+        datePaiement: new Date(),
+        caissierId: data.caissierId,
+        details: { create: detailsData },
+      },
+      include: { details: { include: { menu: true } }, table: true },
+    });
+
+    // 2. Générer la facture
+    const numero = `FAC-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${commande.id.toString().padStart(4, '0')}`;
+    const facture = await this.prisma.facture.create({
+      data: { numero, commandeId: commande.id, montantTotal, modePaiement: data.modePaiement as any, caissierId: data.caissierId },
+    });
+
+    return { commande, facture, numeroCommande: `CMD-${String(commande.id).padStart(4, '0')}` };
+  }
+
   // ---- LIVRAISON ----
 
   async getLivraisons(restaurantId: number) {

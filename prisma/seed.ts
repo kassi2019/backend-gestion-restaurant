@@ -254,7 +254,7 @@ async function main() {
     CUISINE: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
     BAR: ['Accueil', 'Commandes', 'Planning', 'Notifications'],
     RECEPTIONNISTE: ['Accueil', 'Tables', 'Menu', 'Reception', 'Commandes', 'Planning', 'Notifications', 'Réservations'],
-    CAISSIER: ['Accueil', 'Planning', 'Caisse', 'Notifications'],
+    CAISSIER: ['Accueil', 'Planning', 'Caisse', 'Notifications', 'Menu', 'Tables'],
   };
   const allUsers = await prisma.utilisateur.findMany({ include: { userModules: true } });
   for (const utilisateur of allUsers) {

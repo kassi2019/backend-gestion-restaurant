@@ -20,7 +20,7 @@ import { Role, StatutTable } from '@prisma/client';
 export class TablesController {
   constructor(private tablesService: TablesService) {}
 
-  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR, Role.RECEPTIONNISTE)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SERVEUR, Role.RECEPTIONNISTE, Role.CAISSIER)
   @Get()
   findAll(@Request() req) {
     return this.tablesService.findAll(req.user.restaurantId);

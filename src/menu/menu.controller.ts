@@ -19,7 +19,7 @@ export class MenuController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE, Role.CAISSIER)
   @Get('categories')
   getCategories(@Request() req) {
     return this.menuService.getCategories(req.user.restaurantId);
@@ -33,7 +33,7 @@ export class MenuController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE, Role.CAISSIER)
   @Get()
   getMenus(@Request() req) {
     return this.menuService.getMenus(req.user.restaurantId);

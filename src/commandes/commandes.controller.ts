@@ -127,6 +127,14 @@ export class CommandesController {
     return this.commandesService.getStats(req.user.restaurantId, req.user.id, req.user.role);
   }
 
+  // ---- MODE CAISSE ----
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.CAISSIER)
+  @Post('caisse-directe')
+  createAndPay(@Body() data: { tableId: number; details: { menuId: number; quantite: number }[]; modePaiement: string }, @Request() req) {
+    return this.commandesService.createAndPay({ ...data, caissierId: req.user.id, restaurantId: req.user.restaurantId });
+  }
+
   // ---- LIVRAISON ----
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)

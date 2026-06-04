@@ -47,6 +47,7 @@ enum StatutRestaurant {
 enum ModeGestion {
   SERVEUR
   RECEPTION
+  CAISSE
 }
 
 // ---- Utilisateurs (employés + admin) ----
