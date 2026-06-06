@@ -47,19 +47,31 @@ export class ClientController {
   async getQrCodes(@Res() res: Response, @Req() req: Request, @Query('restaurantId') restaurantId?: string) {
     const tables = await this.prisma.tableRestaurant.findMany({
       where: restaurantId ? { restaurantId: parseInt(restaurantId) } : {},
-      select: { id: true, numero: true, zone: true, restaurantId: true },
+      select: {
+        id: true,
+        numero: true,
+        zone: true,
+        zoneId: true,
+        restaurantId: true,
+        zoneTarif: { select: { nom: true, coefficient: true } },
+      },
       orderBy: { numero: 'asc' },
     });
 
     const baseUrl = getBaseUrl(req);
 
     const cards = tables
-      .map(
-        (t) =>
-          `<div class=card><h3>Table ${t.numero}</h3>` +
+      .map((t) => {
+        const zoneNom = t.zoneTarif?.nom || t.zone;
+        let zoneLabel = zoneNom ? `Zone: ${zoneNom}` : '';
+        return (
+          `<div class=card data-zone-id="${t.zoneId || ''}" data-table-id="${t.id}">` +
+          `<h3>Table ${t.numero}</h3>` +
           `<img src=/qr-table-${t.id}.png width=200 alt="QR Table ${t.numero}">` +
-          `<p>Zone: ${t.zone}</p></div>`,
-      )
+          (zoneLabel ? `<p>${zoneLabel}</p>` : '') +
+          `</div>`
+        );
+      })
       .join('\n');
 
     const html =

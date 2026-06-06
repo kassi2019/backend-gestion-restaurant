@@ -31,6 +31,7 @@ model Restaurant {
   clotures        ClotureCaisse[]
   codesActivation CodeActivation[]
   reservations    Reservation[]
+  evaluations     Evaluation[]
 }
 
 enum TypeAbonnement {
@@ -398,6 +399,21 @@ enum TypeCloture {
 }
 
 // ---- Modules dynamiques par utilisateur ----
+// ---- Évaluations (notation restaurant) ----
+model Evaluation {
+  id            Int      @id @default(autoincrement())
+  telephone     String   @db.VarChar(30)
+  noteService   Int      @default(5)
+  noteCuisine   Int      @default(5)
+  noteAmbiance  Int      @default(5)
+  commentaire   String?  @db.Text
+  restaurantId  Int      @map("restaurant_id")
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
+  dateCreation  DateTime @default(now()) @map("date_creation")
+
+  @@map("evaluations")
+}
+
 // ---- Réservations ----
 model Reservation {
   id              Int                @id @default(autoincrement())

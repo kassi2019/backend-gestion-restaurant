@@ -17,6 +17,7 @@ import { StatistiquesModule } from './statistiques/statistiques.module';
 import { ClientModule } from './client/client.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { ZonesModule } from './zones/zones.module';
+import { EvaluationsModule } from './evaluations/evaluations.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -37,6 +38,7 @@ import { ZonesModule } from './zones/zones.module';
     ClientModule,
     ReservationsModule,
     ZonesModule,
+    EvaluationsModule,
   ],
 })
 export class AppModule {}

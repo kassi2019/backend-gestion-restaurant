@@ -73,13 +73,15 @@ export class MenuService {
   async getMenuPublic(restaurantId: number, tableId?: number) {
     let coefficient = 1.0;
     let zoneNom = '';
+    let zoneId: number | null = null;
 
     if (tableId) {
       const table = await this.prisma.tableRestaurant.findUnique({
         where: { id: tableId },
-        include: { zoneTarif: { select: { nom: true, coefficient: true } } },
+        include: { zoneTarif: { select: { id: true, nom: true, coefficient: true } } },
       });
       if (table?.zoneTarif) {
+        zoneId = table.zoneTarif.id;
         zoneNom = table.zoneTarif.nom;
         coefficient = Number(table.zoneTarif.coefficient) || 1.0;
       } else if (table?.zone) {
@@ -119,7 +121,7 @@ export class MenuService {
       tableNumero = t?.numero || '';
     }
 
-    return { categories, zone: zoneNom, coefficient, tableNumero };
+    return { categories, zone: zoneNom, zoneId, coefficient, tableNumero };
   }
 
   async updateMenu(

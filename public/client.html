@@ -84,12 +84,37 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .closed-banner h2 { font-size: 22px; color: #f44336; font-weight: 800; margin-bottom: 12px; }
 .closed-banner p { font-size: 14px; color: #666; margin-bottom: 4px; }
 .closed-date { font-size: 24px; font-weight: 900; color: #f44336; margin-top: 8px !important; }
+/* Rating */
+.rating-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+.rating-row span { font-size: 14px; font-weight: 600; color: #333; }
+.stars { display: flex; gap: 4px; }
+.star { font-size: 28px; cursor: pointer; transition: transform 0.1s; color: #ddd; }
+.star.active { color: #FFB300; transform: scale(1.1); }
+.star:hover { transform: scale(1.2); }
+/* Assistant IA */
+.assistant-bar { background: white; padding: 10px 12px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid #eee; }
+.assistant-bar input { flex: 1; height: 40px; border: 2px solid #E86B2A; border-radius: 20px; padding: 0 16px; font-size: 14px; outline: none; }
+.assistant-bar input::placeholder { color: #ccc; }
+.mic-btn { width: 40px; height: 40px; border-radius: 20px; border: none; background: #E86B2A; color: white; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+.mic-btn:active { transform: scale(0.9); }
+.mic-btn.listening { background: #f44336; animation: pulse 1s infinite; }
+.send-btn { width: 40px; height: 40px; border-radius: 20px; border: none; background: #4CAF50; color: white; font-size: 18px; cursor: pointer; flex-shrink: 0; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(244,67,54,0.4); } 50% { box-shadow: 0 0 0 12px rgba(244,67,54,0); } }
+.ai-confirm-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+.ai-confirm-item .name { flex: 1; font-size: 14px; }
+.ai-confirm-item .qty { font-weight: 700; margin: 0 8px; }
+.ai-confirm-item .price { font-weight: 700; color: #E86B2A; }
+.ai-badge { display: inline-block; background: linear-gradient(135deg, #E86B2A, #F59E0B); color: white; font-size: 10px; padding: 2px 8px; border-radius: 8px; margin-left: 6px; font-weight: 700; }
+/* Modal content */
+.modal-content { background: white; border-radius: 20px 20px 0 0; padding: 24px; max-height: 85vh; overflow-y: auto; }
+#ratingModal .modal-content { border-radius: 20px; margin: auto; max-width: 360px; width: 90%; }
+#ratingModal { align-items: center; justify-content: center; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>🍽 RestoPro</h1>
+  <h1><span id="headerName">menuGo</span></h1>
   <div class="table-badge" id="tableBadge">Table ...</div>
   <div class="info-text" id="zoneInfo" style="display:none;font-weight:700;font-size:13px;margin-top:4px;background:rgba(255,255,255,0.25);padding:2px 10px;border-radius:10px"></div>
   <div class="info-text">Scannez, commandez, dégustez !</div>
@@ -106,6 +131,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 </div>
 
 <div id="app" style="display:none">
+  <!-- Assistant IA -->
+  <div class="assistant-bar">
+    <button class="mic-btn" id="micBtn" onclick="toggleAssistant()" title="Commande vocale">🎤</button>
+    <input type="text" id="assistantInput" placeholder="Dites ou écrivez votre commande..." onkeydown="if(event.key==='Enter')sendToAssistant()">
+    <button class="send-btn" onclick="sendToAssistant()">➤</button>
+  </div>
   <div class="categories" id="categories"></div>
   <div class="menu-list" id="menuList"></div>
   <div class="cart-bar">
@@ -145,6 +176,18 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   </div>
 </div>
 
+<!-- Modal Assistant IA -->
+<div class="modal-overlay" id="aiModal">
+  <div class="modal">
+    <h2>🤖 Assistant Commande</h2>
+    <div id="aiResponse" style="text-align:center;color:#666;font-size:13px;margin-bottom:10px"></div>
+    <div id="aiArticles"></div>
+    <div id="aiArticlesTotal" style="text-align:right;font-size:18px;font-weight:800;color:#E86B2A;padding:10px 0"></div>
+    <button class="order-btn" style="width:100%;padding:14px" onclick="confirmAiCart()">✅ Ajouter au panier</button>
+    <button style="width:100%;padding:12px;margin-top:8px;background:none;border:1px solid #ddd;border-radius:25px;font-size:14px;color:#999" onclick="document.getElementById('aiModal').classList.remove('show')">Fermer</button>
+  </div>
+</div>
+
 <!-- Modal historique commandes -->
 <div class="modal-overlay" id="historyModal">
   <div class="modal">
@@ -153,6 +196,26 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     <div id="historyContent" style="max-height:50vh;overflow-y:auto"></div>
     <button class="invoice-btn" style="width:100%;padding:14px;margin-top:12px;display:none" id="historyInvoiceBtn" onclick="demanderFacture()">🧾 Demander l'addition</button>
     <button style="width:100%;padding:12px;margin-top:8px;background:none;border:1px solid #ddd;border-radius:25px;font-size:14px;color:#999" onclick="document.getElementById('historyModal').classList.remove('show')">Fermer</button>
+    <button style="width:100%;padding:12px;margin-top:8px;background:#FF9800;color:white;border:none;border-radius:25px;font-size:14px;font-weight:700;cursor:pointer" onclick="openRating()">⭐ Noter le restaurant</button>
+  </div>
+</div>
+
+<!-- Rating Modal -->
+<div class="modal-overlay" id="ratingModal">
+  <div class="modal-content">
+    <h3 style="text-align:center;font-size:18px;font-weight:800;margin-bottom:4px">⭐ Donnez votre avis</h3>
+    <p style="text-align:center;font-size:11px;color:#888;margin-bottom:16px">Votre avis nous aide à nous améliorer</p>
+
+    <div class="rating-row"><span>Service</span><div class="stars" id="starsService"></div></div>
+    <div class="rating-row"><span>Cuisine</span><div class="stars" id="starsCuisine"></div></div>
+    <div class="rating-row"><span>Ambiance</span><div class="stars" id="starsAmbiance"></div></div>
+
+    <textarea id="ratingComment" placeholder="Votre commentaire (optionnel)..." style="width:100%;height:60px;border:1px solid #ddd;border-radius:12px;padding:10px;margin:12px 0;font-size:13px;resize:none"></textarea>
+
+    <input id="ratingTel" type="tel" placeholder="Votre téléphone (optionnel)" style="width:100%;height:44px;border:1px solid #ddd;border-radius:12px;padding:10px;margin-bottom:12px;font-size:13px">
+
+    <button style="width:100%;padding:14px;background:#E86B2A;color:white;border:none;border-radius:25px;font-size:15px;font-weight:700;cursor:pointer" onclick="submitRating()">✅ Envoyer mon avis</button>
+    <button style="width:100%;padding:12px;margin-top:8px;background:none;border:1px solid #ddd;border-radius:25px;font-size:14px;color:#999" onclick="document.getElementById('ratingModal').classList.remove('show')">Non merci</button>
   </div>
 </div>
 
@@ -184,6 +247,8 @@ if (savedTableId === tableId) {
 let commandesCount = 0;
 let devise = '€';
 let restaurantNom = 'RestoPro';
+let currentZoneId = null;
+let currentCoefficient = 1.0;
 
 // Socket.IO: ecouter les changements de statut en temps reel
 let socket;
@@ -276,7 +341,8 @@ async function loadRestaurantInfo() {
       if (info.devise) devise = info.devise;
       if (info.nom) {
         restaurantNom = info.nom;
-        document.querySelector('.header h1').textContent = '🍽 ' + restaurantNom;
+        var headerNameEl = document.getElementById('headerName');
+	        if (headerNameEl) headerNameEl.textContent = restaurantNom;
       }
 
       // Vérifier si le restaurant est fermé
@@ -314,8 +380,10 @@ async function loadMenu() {
     if (data.tableNumero) {
       document.getElementById('tableBadge').textContent = 'Table ' + data.tableNumero + ' • Client ' + clientId;
     }
-    if (data.zone) {
-      document.getElementById('zoneInfo').textContent = `🏷️ ${data.zone}`;
+    if (data.zone || data.zoneId) {
+      currentZoneId = data.zoneId || null;
+      currentCoefficient = data.coefficient || 1.0;
+      document.getElementById('zoneInfo').textContent = `🏷️ ${data.zone || 'Zone ' + data.zoneId}`;
       document.getElementById('zoneInfo').style.display = 'block';
     }
     menus = categories.flatMap(c => c.menus.map(m => ({ ...m, categorieNom: c.nom })));
@@ -659,6 +727,164 @@ function showToast(msg, isError = false) {
 loadMenu();
 restoreSession();
 connectSocketClient();
+
+// ======= ASSISTANT IA =======
+var recognition = null;
+var aiArticles = [];
+
+function toggleAssistant() {
+  var btn = document.getElementById('micBtn');
+  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast('La reconnaissance vocale n est pas disponible sur ce navigateur. Utilisez Chrome.', true);
+    return;
+  }
+  if (recognition) {
+    recognition.stop();
+    recognition = null;
+    btn.classList.remove('listening');
+    return;
+  }
+  recognition = new SpeechRecognition();
+  recognition.lang = 'fr-FR';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.onstart = function() { btn.classList.add('listening'); };
+  recognition.onend = function() { btn.classList.remove('listening'); recognition = null; };
+  recognition.onresult = function(event) {
+    var text = event.results[0][0].transcript;
+    document.getElementById('assistantInput').value = text;
+    sendToAssistant();
+  };
+  recognition.onerror = function(event) {
+    btn.classList.remove('listening');
+    recognition = null;
+    if (event.error === 'not-allowed') showToast('Veuillez autoriser le micro dans les parametres du navigateur.', true);
+  };
+  recognition.start();
+}
+
+async function sendToAssistant() {
+  var input = document.getElementById('assistantInput');
+  var message = input.value.trim();
+  if (!message) return;
+  input.value = '';
+  var aiResponse = document.getElementById('aiResponse');
+  var aiArticlesDiv = document.getElementById('aiArticles');
+  var aiTotal = document.getElementById('aiArticlesTotal');
+  aiResponse.textContent = '🤔 Analyse de votre commande...';
+  aiArticlesDiv.innerHTML = '';
+  aiTotal.textContent = '';
+  document.getElementById('aiModal').classList.add('show');
+  try {
+    var res = await fetch('/api/commandes/assistant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: message, tableId: parseInt(tableId), restaurantId: parseInt(restaurantId) }),
+    });
+    var data = await res.json();
+    aiArticles = data.articles || [];
+    aiResponse.textContent = data.reponse || '';
+    if (aiArticles.length === 0) {
+      aiArticlesDiv.innerHTML = '<p style="text-align:center;color:#f44336;padding:20px">Aucun plat identifie. Essayez de reformuler.</p>';
+      aiTotal.textContent = '';
+    } else {
+      var total = 0;
+      aiArticlesDiv.innerHTML = aiArticles.map(function(a) {
+        var sousTotal = a.prix * (a.quantite || 1);
+        total += sousTotal;
+        return '<div class="ai-confirm-item">' +
+          '<span class="name">' + a.quantite + 'x ' + a.nom + '</span>' +
+          '<span class="price">' + sousTotal.toFixed(2) + ' ' + devise + '</span>' +
+          '</div>';
+      }).join('');
+      aiTotal.textContent = 'Total: ' + total.toFixed(2) + ' ' + devise;
+    }
+  } catch(e) {
+    aiResponse.textContent = 'Erreur reseau. L assistant IA est indisponible.';
+    showToast('Assistant IA indisponible', true);
+  }
+}
+
+function confirmAiCart() {
+  aiArticles.forEach(function(a) {
+    addToCart(a.menuId, a.variantId || null, a.variantId ? a.nom : null, a.prix);
+  });
+  document.getElementById('aiModal').classList.remove('show');
+  aiArticles = [];
+  showToast(aiArticles.length + ' article(s) ajoutes au panier', false);
+}
+
+// ======= RATING =======
+var ratings = { service: 5, cuisine: 5, ambiance: 5 };
+
+function buildStars(containerId, key) {
+  var html = '';
+  for (var i = 1; i <= 5; i++) {
+    html += '<span class="star' + (i <= ratings[key] ? ' active' : '') + '" data-key="' + key + '" data-val="' + i + '">★</span>';
+  }
+  document.getElementById(containerId).innerHTML = html;
+  // Attacher les événements après avoir créé le HTML
+  var container = document.getElementById(containerId);
+  container.querySelectorAll('.star').forEach(function(star) {
+    star.addEventListener('click', function() {
+      var k = this.getAttribute('data-key');
+      var v = parseInt(this.getAttribute('data-val'));
+      setRating(k, v);
+    });
+    star.addEventListener('mouseenter', function() {
+      var k = this.getAttribute('data-key');
+      var v = parseInt(this.getAttribute('data-val'));
+      hoverStars(k, v);
+    });
+    star.addEventListener('mouseleave', function() {
+      var k = this.getAttribute('data-key');
+      resetStars(k);
+    });
+  });
+}
+
+function setRating(key, value) {
+  ratings[key] = value;
+  buildStars(key === 'service' ? 'starsService' : key === 'cuisine' ? 'starsCuisine' : 'starsAmbiance', key);
+}
+
+function hoverStars(key, value) {
+  var container = document.getElementById(key === 'service' ? 'starsService' : key === 'cuisine' ? 'starsCuisine' : 'starsAmbiance');
+  var stars = container.querySelectorAll('.star');
+  stars.forEach(function(s, i) { s.classList.toggle('active', i < value); });
+}
+
+function resetStars(key) {
+  var container = document.getElementById(key === 'service' ? 'starsService' : key === 'cuisine' ? 'starsCuisine' : 'starsAmbiance');
+  var stars = container.querySelectorAll('.star');
+  stars.forEach(function(s, i) { s.classList.toggle('active', i < ratings[key]); });
+}
+
+function openRating() {
+  document.getElementById('historyModal').classList.remove('show');
+  buildStars('starsService', 'service');
+  buildStars('starsCuisine', 'cuisine');
+  buildStars('starsAmbiance', 'ambiance');
+  document.getElementById('ratingModal').classList.add('show');
+}
+
+async function submitRating() {
+  var tel = document.getElementById('ratingTel').value.trim() || 'Anonyme';
+  var comment = document.getElementById('ratingComment').value.trim();
+  try {
+    await fetch(`/api/evaluations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        telephone: tel, noteService: ratings.service, noteCuisine: ratings.cuisine,
+        noteAmbiance: ratings.ambiance, commentaire: comment || undefined, restaurantId: parseInt(restaurantId),
+      }),
+    });
+    document.getElementById('ratingModal').classList.remove('show');
+    showToast('⭐ Merci pour votre avis !', false);
+  } catch(e) { showToast('Erreur lors de l\'envoi', true); }
+}
 
 // Rafraîchissement automatique toutes les 15 secondes
 setInterval(function() {

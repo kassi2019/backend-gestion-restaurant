@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { CommandesService } from './commandes.service';
+import { AiService } from '../ai/ai.service';
+import { MenuService } from '../menu/menu.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -7,7 +9,38 @@ import { Role, StatutCommande, StatutPreparation } from '@prisma/client';
 
 @Controller('commandes')
 export class CommandesController {
-  constructor(private commandesService: CommandesService) {}
+  constructor(
+    private commandesService: CommandesService,
+    private aiService: AiService,
+    private menuService: MenuService,
+  ) {}
+
+  @Post('assistant')
+  async assistantCommande(@Body() data: { message: string; tableId: number; restaurantId: number }) {
+    // Récupérer le menu du restaurant
+    const menuData = await this.menuService.getMenuPublic(data.restaurantId, data.tableId);
+    const menus = menuData.categories.flatMap((c: any) =>
+      c.menus.map((m: any) => ({
+        id: m.id,
+        nom: m.nom,
+        prix: Number(m.prix),
+        categorieNom: c.nom,
+        variants: (m.variants || []).map((v: any) => ({
+          id: v.id,
+          nom: v.nom,
+          prix: Number(v.prix),
+        })),
+      })),
+    );
+
+    const result = await this.aiService.commander({
+      message: data.message,
+      menus,
+      restaurantNom: 'menuGo',
+    });
+
+    return result;
+  }
 
   @Post('client')
   createFromClient(@Body() data: { tableId: number; sessionKey?: string; articles: { menuId: number; quantite: number }[] }) {
