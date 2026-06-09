@@ -32,11 +32,14 @@ model Restaurant {
   codesActivation CodeActivation[]
   reservations    Reservation[]
   evaluations     Evaluation[]
+  paiements       PaiementAbonnement[]
+  modules         RestaurantModule[]
 }
 
 enum TypeAbonnement {
   TRIAL
   MENSUEL
+  TRIMESTRIEL
   ANNUEL
 }
 
@@ -76,6 +79,7 @@ model Utilisateur {
   livraisons       Commande[]             @relation("LivraisonsLivreur")
   cloturesCaissier ClotureCaisse[]
   userModules     UserModule[]
+  paiementsVerifies PaiementAbonnement[]
 
   @@map("utilisateurs")
 }
@@ -183,12 +187,13 @@ model Menu {
 
 // ---- Variantes de menu (ex: avec/sans alcool) ----
 model MenuVariant {
-  id        Int     @id @default(autoincrement())
-  menuId    Int     @map("menu_id")
-  menu      Menu    @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  nom       String  @db.VarChar(100)
-  prix      Decimal @db.Decimal(10, 2)
-  image     String? @db.Text
+  id        Int               @id @default(autoincrement())
+  menuId    Int               @map("menu_id")
+  menu      Menu              @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  nom       String            @db.VarChar(100)
+  prix      Decimal           @db.Decimal(10, 2)
+  image     String?           @db.Text
+  details   CommandeDetail[]
 
   @@map("menu_variants")
 }
@@ -314,6 +319,8 @@ model CommandeDetail {
   commande          Commande          @relation(fields: [commandeId], references: [id])
   menuId            Int               @map("menu_id")
   menu              Menu              @relation(fields: [menuId], references: [id])
+  variantId         Int?              @map("variant_id")
+  variant           MenuVariant?      @relation(fields: [variantId], references: [id])
   quantite          Int               @default(1)
   prix              Decimal           @db.Decimal(10, 2)
   statutPreparation StatutPreparation @default(EN_PREPARATION) @map("statut_preparation")
@@ -447,6 +454,7 @@ model Module {
   route     String       @db.VarChar(100)
   ordre     Int          @default(0)
   userModules UserModule[]
+  restaurantModules RestaurantModule[]
 
   @@map("modules")
 }
@@ -460,6 +468,18 @@ model UserModule {
 
   @@unique([utilisateurId, moduleId])
   @@map("user_modules")
+}
+
+// Modules accordés à un restaurant par le Super Admin
+model RestaurantModule {
+  id           Int        @id @default(autoincrement())
+  restaurantId Int        @map("restaurant_id")
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  moduleId     Int        @map("module_id")
+  module       Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, moduleId])
+  @@map("restaurant_modules")
 }
 
 // ---- Codes d'activation d'abonnement ----
@@ -489,4 +509,43 @@ model HistoriqueAbonnement {
   dateCreation    DateTime  @default(now()) @map("date_creation")
 
   @@map("historique_abonnement")
+}
+
+// ---- Plans d'abonnement (configurés par le Super Admin) ----
+model PlanAbonnement {
+  id          Int      @id @default(autoincrement())
+  nom         String   @db.VarChar(100)
+  dureeJours  Int      @map("duree_jours")
+  prix        Decimal  @db.Decimal(10, 2)
+  actif       Boolean  @default(true)
+  dateCreation DateTime @default(now()) @map("date_creation")
+  paiements   PaiementAbonnement[]
+
+  @@map("plans_abonnement")
+}
+
+// ---- Paiements d'abonnement initiés par les restos ----
+model PaiementAbonnement {
+  id             Int               @id @default(autoincrement())
+  restaurantId   Int               @map("restaurant_id")
+  restaurant     Restaurant        @relation(fields: [restaurantId], references: [id])
+  planId         Int               @map("plan_id")
+  plan           PlanAbonnement    @relation(fields: [planId], references: [id])
+  montant        Decimal           @db.Decimal(10, 2)
+  dureeJours     Int               @map("duree_jours")
+  reference      String            @unique @db.VarChar(50)
+  infosPaiement  String?           @map("infos_paiement") @db.Text
+  statut         StatutPaiementAbo @default(EN_ATTENTE)
+  verifiedPar    Int?              @map("verified_par")
+  verificateur   Utilisateur?      @relation(fields: [verifiedPar], references: [id])
+  dateVerification DateTime?       @map("date_verification")
+  dateCreation   DateTime          @default(now()) @map("date_creation")
+
+  @@map("paiements_abonnement")
+}
+
+enum StatutPaiementAbo {
+  EN_ATTENTE
+  CONFIRME
+  REJETE
 }

@@ -174,11 +174,25 @@ export class AuthService {
       },
     });
 
+    // Récupérer les modules autorisés pour ce restaurant
+    const restaurantModules = await this.prisma.restaurantModule.findMany({
+      where: { restaurantId: dto.restaurantId },
+      select: { moduleId: true },
+    });
+    const allowedIds = new Set(restaurantModules.map(rm => rm.moduleId));
+    const hasRestaurantModules = restaurantModules.length > 0;
+
     // Assigner les modules si fournis, sinon auto-assigner selon le rôle
     if (dto.moduleIds?.length > 0) {
-      await this.prisma.userModule.createMany({
-        data: dto.moduleIds.map(mid => ({ utilisateurId: user.id, moduleId: mid })),
-      });
+      // Filtrer par les modules autorisés du restaurant (si définis)
+      const validIds = hasRestaurantModules
+        ? dto.moduleIds.filter(id => allowedIds.has(id))
+        : dto.moduleIds;
+      if (validIds.length > 0) {
+        await this.prisma.userModule.createMany({
+          data: validIds.map(mid => ({ utilisateurId: user.id, moduleId: mid })),
+        });
+      }
     } else {
       // Fallback: assigner les modules par défaut selon le rôle
       const roleModules: Record<string, string[]> = {
@@ -193,7 +207,12 @@ export class AuthService {
         LIVREUR: ['Accueil', 'Livraisons', 'Notifications'],
       };
       const noms = roleModules[dto.role] || ['Accueil', 'Notifications'];
-      const modules = await this.prisma.module.findMany({ where: { nom: { in: noms } } });
+      const where: any = { nom: { in: noms } };
+      // Filtrer par RestaurantModule seulement si le resto a des modules définis
+      if (hasRestaurantModules) {
+        where.id = { in: [...allowedIds] };
+      }
+      const modules = await this.prisma.module.findMany({ where });
       if (modules.length > 0) {
         await this.prisma.userModule.createMany({
           data: modules.map(m => ({ utilisateurId: user.id, moduleId: m.id })),

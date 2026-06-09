@@ -322,6 +322,177 @@ export class ActivationService {
     return { restaurant, historique };
   }
 
+  // ============ NOUVEAU SYSTÈME : Plans + Paiements ============
+
+  // --- CRUD Plans (Super Admin) ---
+
+  async getPlans() {
+    return this.prisma.planAbonnement.findMany({
+      where: { actif: true },
+      orderBy: { dureeJours: 'asc' },
+    });
+  }
+
+  async getAllPlans() {
+    return this.prisma.planAbonnement.findMany({ orderBy: { dureeJours: 'asc' } });
+  }
+
+  async createPlan(data: { nom: string; dureeJours: number; prix: number }) {
+    return this.prisma.planAbonnement.create({
+      data: { nom: data.nom, dureeJours: data.dureeJours, prix: data.prix },
+    });
+  }
+
+  async updatePlan(id: number, data: { nom?: string; dureeJours?: number; prix?: number; actif?: boolean }) {
+    const plan = await this.prisma.planAbonnement.findUnique({ where: { id } });
+    if (!plan) throw new BadRequestException('Plan introuvable');
+    return this.prisma.planAbonnement.update({ where: { id }, data });
+  }
+
+  async deletePlan(id: number) {
+    const plan = await this.prisma.planAbonnement.findUnique({ where: { id } });
+    if (!plan) throw new BadRequestException('Plan introuvable');
+    // Vérifier si des paiements sont liés
+    const paiements = await this.prisma.paiementAbonnement.count({ where: { planId: id } });
+    if (paiements > 0) {
+      // Désactiver plutôt que supprimer
+      return this.prisma.planAbonnement.update({ where: { id }, data: { actif: false } });
+    }
+    return this.prisma.planAbonnement.delete({ where: { id } });
+  }
+
+  async getConfigPaiement() {
+    return {
+      waveNumero: process.env.WAVE_NUMERO || '01 02 03 04 05',
+      omNumero: process.env.OM_NUMERO || '05 06 07 08 09',
+      instructions: process.env.PAIEMENT_INSTRUCTIONS || 'Envoyez le montant via Wave ou Orange Money, puis confirmez ci-dessous avec la référence de transaction.',
+    };
+  }
+
+  async initierPaiement(restaurantId: number, planId: number, infosPaiement?: string) {
+    const plan = await this.prisma.planAbonnement.findUnique({ where: { id: planId } });
+    if (!plan || !plan.actif) throw new BadRequestException('Plan indisponible');
+
+    const ref = 'PAY-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+
+    const paiement = await this.prisma.paiementAbonnement.create({
+      data: {
+        restaurantId,
+        planId,
+        montant: plan.prix,
+        dureeJours: plan.dureeJours,
+        reference: ref,
+        infosPaiement: infosPaiement || null,
+      },
+      include: { plan: true },
+    });
+
+    return paiement;
+  }
+
+  async mesPaiements(restaurantId: number) {
+    return this.prisma.paiementAbonnement.findMany({
+      where: { restaurantId },
+      orderBy: { dateCreation: 'desc' },
+      include: { plan: true },
+    });
+  }
+
+  async getPaiementsEnAttente() {
+    return this.prisma.paiementAbonnement.findMany({
+      where: { statut: 'EN_ATTENTE' },
+      orderBy: { dateCreation: 'desc' },
+      include: { restaurant: { select: { id: true, nom: true, telephone: true } }, plan: true },
+    });
+  }
+
+  async confirmerPaiement(paiementId: number, superAdminId: number) {
+    const paiement = await this.prisma.paiementAbonnement.findUnique({
+      where: { id: paiementId },
+      include: { plan: true, restaurant: { select: { id: true, dateFinAbonnement: true } } },
+    });
+    if (!paiement) throw new BadRequestException('Paiement introuvable');
+    if (paiement.statut !== 'EN_ATTENTE') throw new BadRequestException('Ce paiement a déjà été traité');
+
+    // Générer le code d'activation et activer l'abonnement
+    const codeClair = this.genererCode();
+    const codeEncrypted = encrypt(codeClair);
+
+    const maintenant = new Date();
+    const dateBase =
+      paiement.restaurant.dateFinAbonnement && paiement.restaurant.dateFinAbonnement > maintenant
+        ? paiement.restaurant.dateFinAbonnement
+        : maintenant;
+    const nouvelleDateFin = new Date(dateBase);
+    nouvelleDateFin.setDate(nouvelleDateFin.getDate() + paiement.dureeJours);
+
+    let typeAbonnement: 'MENSUEL' | 'TRIMESTRIEL' | 'ANNUEL' = 'MENSUEL';
+    if (paiement.dureeJours >= 365) typeAbonnement = 'ANNUEL';
+    else if (paiement.dureeJours >= 90) typeAbonnement = 'TRIMESTRIEL';
+
+    await this.prisma.$transaction([
+      // Créer le code d'activation
+      this.prisma.codeActivation.create({
+        data: {
+          codeEncrypted,
+          dureeJours: paiement.dureeJours,
+          estUtilise: true,
+          dateUtilisation: maintenant,
+          restaurantId: paiement.restaurantId,
+        },
+      }),
+      // Activer l'abonnement
+      this.prisma.restaurant.update({
+        where: { id: paiement.restaurantId },
+        data: {
+          typeAbonnement: typeAbonnement as any,
+          dateFinAbonnement: nouvelleDateFin,
+        },
+      }),
+      // Enregistrer dans l'historique
+      this.prisma.historiqueAbonnement.create({
+        data: {
+          restaurantId: paiement.restaurantId,
+          typeAbonnement: typeAbonnement as any,
+          dureeJours: paiement.dureeJours,
+          dateDebut: dateBase,
+          dateFin: nouvelleDateFin,
+          codeUtilise: codeClair,
+        },
+      }),
+      // Confirmer le paiement
+      this.prisma.paiementAbonnement.update({
+        where: { id: paiementId },
+        data: {
+          statut: 'CONFIRME',
+          verifiedPar: superAdminId,
+          dateVerification: maintenant,
+        },
+      }),
+    ]);
+
+    return {
+      message: 'Paiement confirmé, abonnement activé',
+      code: codeClair,
+      typeAbonnement,
+      dateFinAbonnement: nouvelleDateFin,
+      joursAjoutes: paiement.dureeJours,
+    };
+  }
+
+  async rejeterPaiement(paiementId: number, superAdminId: number) {
+    const paiement = await this.prisma.paiementAbonnement.findUnique({ where: { id: paiementId } });
+    if (!paiement) throw new BadRequestException('Paiement introuvable');
+    if (paiement.statut !== 'EN_ATTENTE') throw new BadRequestException('Ce paiement a déjà été traité');
+
+    await this.prisma.paiementAbonnement.update({
+      where: { id: paiementId },
+      data: { statut: 'REJETE', verifiedPar: superAdminId, dateVerification: new Date() },
+    });
+
+    return { message: 'Paiement rejeté' };
+  }
+
   private genererCode(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     const bloc1 = Array.from({ length: 4 }, () =>

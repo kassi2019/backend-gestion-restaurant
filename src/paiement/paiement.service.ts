@@ -1,15 +1,19 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModePaiement } from '@prisma/client';
 import { SocketGateway } from '../socket/socket.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PrinterService } from '../printer/printer.service';
 
 @Injectable()
 export class PaiementService {
+  private readonly logger = new Logger(PaiementService.name);
+
   constructor(
     private prisma: PrismaService,
     private socketGateway: SocketGateway,
     private notificationsService: NotificationsService,
+    private printerService: PrinterService,
   ) {}
 
   async appliquerRemise(commandeId: number, data: { type: string; valeur: number; motif?: string }) {
@@ -105,6 +109,14 @@ export class PaiementService {
       montant: Number(commande.montantTotal),
       mode,
     });
+
+    // 🖨 Impression automatique du reçu si configurée
+    const printerConfig = this.printerService.getConfig();
+    if (printerConfig.type !== 'NONE' && printerConfig.autoPrint) {
+      this.imprimerFactureAuto(facture.id).catch((err) =>
+        this.logger.error(`Erreur impression auto facture #${facture.id}: ${err.message}`),
+      );
+    }
 
     return {
       message: 'Paiement effectué avec succès',
@@ -336,6 +348,40 @@ export class PaiementService {
       message: 'Restaurant fermé. Réouverture prévue le ' + dateReouverture,
       dateReouverture,
     };
+  }
+
+  private async imprimerFactureAuto(factureId: number) {
+    try {
+      const data = await this.getFactureForPrint(factureId);
+      if (!data) return;
+
+      const receiptData = {
+        titre: data.restaurant.nom,
+        sousTitre: data.restaurant.adresse,
+        numero: data.numero,
+        date: new Date(data.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
+        heure: new Date(data.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        lignes: [
+          { label: 'Table', valeur: data.table },
+          { label: 'Serveur', valeur: data.serveur },
+          { label: 'Caissier', valeur: data.caissier },
+          { label: 'Paiement', valeur: data.modePaiement },
+        ],
+        articles: data.articles,
+        devise: data.restaurant.devise,
+        remise: data.remise,
+        total: data.total,
+        modePaiement: data.modePaiement,
+        piedPage: [`${data.restaurant.nom}`, 'Merci de votre visite !'],
+      };
+
+      const result = await this.printerService.printReceipt(receiptData);
+      if (!result.ok) {
+        this.logger.warn(`Impression auto facture #${factureId}: ${result.message}`);
+      }
+    } catch (err: any) {
+      this.logger.error(`Erreur impression auto facture #${factureId}: ${err.message}`);
+    }
   }
 
   async verifierOuverture(restaurantId: number) {

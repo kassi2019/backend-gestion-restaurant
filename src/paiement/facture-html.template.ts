@@ -40,9 +40,11 @@ export function genererFactureHTML(data: FactureData): string {
   .total-row td { padding-top: 10px; border: none; }
   .footer { text-align: center; font-size: 11px; margin-top: 20px; color: #666; }
   .footer p { margin: 4px 0; }
+  @page { size: 80mm auto; margin: 0; }
   @media print {
-    body { padding: 5px; }
-    .no-print { display: none; }
+    body { padding: 3mm; width: 80mm; margin: 0; color: #000 !important; background: #fff !important; }
+    .no-print { display: none !important; }
+    html, body { height: auto; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
   .no-print { text-align: center; margin-top: 20px; }
   .print-btn { background: #E86B2A; color: white; border: none; padding: 10px 30px; border-radius: 20px; font-size: 14px; cursor: pointer; }
@@ -97,7 +99,13 @@ export function genererFactureHTML(data: FactureData): string {
 
   <script>
     // Imprimer automatiquement à l'ouverture
-    window.onload = () => setTimeout(() => window.print(), 500);
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+        // Fermer la fenêtre après impression (ou annulation)
+        window.onafterprint = function() { window.close(); };
+      }, 800);
+    };
   </script>
 </body>
 </html>`;

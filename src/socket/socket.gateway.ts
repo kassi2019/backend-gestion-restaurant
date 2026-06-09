@@ -47,9 +47,12 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.join('reception');
         client.join('admin');
         break;
+      case 'CAISSIER':
+        client.join('caisse');
+        client.join('admin');
+        break;
       case 'MANAGER':
       case 'ADMIN':
-      case 'CAISSIER':
         client.join('admin');
         break;
     }
@@ -68,6 +71,11 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Notifier la reception
   notifierReception(commande: any) {
     this.server.to('reception').emit('nouvelle_commande', commande);
+  }
+
+  // Notifier la caisse (mode CAISSE)
+  notifierCaisse(commande: any) {
+    this.server.to('caisse').emit('nouvelle_commande_caisse', commande);
   }
 
   // Notifier la cuisine

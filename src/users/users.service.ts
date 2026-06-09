@@ -18,8 +18,32 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   private async reassignModules(userId: number, role: string) {
+    // 1. Récupérer le restaurant de l'utilisateur
+    const user = await this.prisma.utilisateur.findUnique({
+      where: { id: userId },
+      select: { restaurantId: true },
+    });
+    if (!user) return;
+
+    // 2. Modules autorisés pour ce restaurant (RestaurantModule)
+    const restaurantModules = await this.prisma.restaurantModule.findMany({
+      where: { restaurantId: user.restaurantId },
+      select: { moduleId: true },
+    });
+    const allowedIds = new Set(restaurantModules.map(rm => rm.moduleId));
+    const hasRestaurantModules = restaurantModules.length > 0;
+
+    // 3. Template du rôle
     const noms = roleModules[role] || ['Accueil', 'Notifications'];
-    const modules = await this.prisma.module.findMany({ where: { nom: { in: noms } } });
+
+    // 4. Filtrer les modules : template ∩ RestaurantModule (si défini)
+    const where: any = { nom: { in: noms } };
+    if (hasRestaurantModules) {
+      where.id = { in: [...allowedIds] };
+    }
+    const modules = await this.prisma.module.findMany({ where });
+
+    // 5. Appliquer
     await this.prisma.userModule.deleteMany({ where: { utilisateurId: userId } });
     for (const m of modules) {
       await this.prisma.userModule.create({ data: { utilisateurId: userId, moduleId: m.id } });

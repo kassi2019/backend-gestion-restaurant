@@ -35,26 +35,108 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('modules')
-  getModules(@Request() req) {
-    const where: any = {};
-    // SUPER_ADMIN uniquement voit "Générer codes"
-    if (req.user.role !== 'SUPER_ADMIN') {
-      where.route = { not: '/super/codes' };
+  async getModules(@Request() req) {
+    // SUPER_ADMIN voit tous les modules
+    if (req.user.role === 'SUPER_ADMIN') {
+      return this.prisma.module.findMany({ orderBy: { ordre: 'asc' } });
     }
-    return this.prisma.module.findMany({ where, orderBy: { ordre: 'asc' } });
+
+    // Admin/Manager/etc : modules filtrés par RestaurantModule
+    const restaurantModules = await this.prisma.restaurantModule.findMany({
+      where: { restaurantId: req.user.restaurantId },
+      include: { module: true },
+    });
+
+    if (restaurantModules.length === 0) {
+      return [];
+    }
+
+    return restaurantModules.map(rm => rm.module).sort((a, b) => a.ordre - b.ordre);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
   @Post('users/:userId/modules')
   async updateUserModules(@Param('userId') userId: string, @Body() data: { moduleIds: number[] }) {
     const uid = parseInt(userId);
+
+    // Trouver le restaurant de l'utilisateur cible
+    const targetUser = await this.prisma.utilisateur.findUnique({
+      where: { id: uid },
+      select: { restaurantId: true },
+    });
+    if (!targetUser) return { message: 'Utilisateur introuvable' };
+
+    // Vérifier que les modules demandés sont autorisés pour ce restaurant
+    const allowedModules = await this.prisma.restaurantModule.findMany({
+      where: { restaurantId: targetUser.restaurantId },
+      select: { moduleId: true },
+    });
+    const allowedIds = new Set(allowedModules.map(m => m.moduleId));
+
+    const validIds = data.moduleIds.filter(id => allowedIds.has(id));
+    const refused = data.moduleIds.filter(id => !allowedIds.has(id));
+
     await this.prisma.userModule.deleteMany({ where: { utilisateurId: uid } });
-    if (data.moduleIds.length > 0) {
+    if (validIds.length > 0) {
       await this.prisma.userModule.createMany({
-        data: data.moduleIds.map(mid => ({ utilisateurId: uid, moduleId: mid })),
+        data: validIds.map(mid => ({ utilisateurId: uid, moduleId: mid })),
       });
     }
-    return { message: 'Modules mis à jour' };
+
+    return {
+      message: 'Modules mis à jour',
+      attribues: validIds.length,
+      refuses: refused.length > 0 ? `${refused.length} module(s) non autorisé(s) pour ce restaurant` : undefined,
+    };
+  }
+
+  // ─── Gestion des modules par restaurant (Super Admin uniquement) ───
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get('restaurants/:restaurantId/modules')
+  async getRestaurantModules(@Param('restaurantId') restaurantId: string) {
+    const rid = parseInt(restaurantId);
+    const assigned = await this.prisma.restaurantModule.findMany({
+      where: { restaurantId: rid },
+      include: { module: true },
+    });
+    const allModules = await this.prisma.module.findMany({ orderBy: { ordre: 'asc' } });
+
+    return {
+      restaurantId: rid,
+      modulesDisponibles: allModules,
+      modulesAttribues: assigned.map(rm => rm.module),
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Post('restaurants/:restaurantId/modules')
+  async setRestaurantModules(
+    @Param('restaurantId') restaurantId: string,
+    @Body() data: { moduleIds: number[] },
+  ) {
+    const rid = parseInt(restaurantId);
+
+    // Supprimer tous les modules actuels du restaurant
+    await this.prisma.restaurantModule.deleteMany({ where: { restaurantId: rid } });
+
+    // Supprimer aussi les userModules qui ne seraient plus dans le périmètre
+    // (les utilisateurs de ce resto perdent les modules retirés)
+    await this.prisma.userModule.deleteMany({
+      where: {
+        utilisateur: { restaurantId: rid },
+        moduleId: { notIn: data.moduleIds.length > 0 ? data.moduleIds : [-1] },
+      },
+    });
+
+    // Assigner les nouveaux modules
+    if (data.moduleIds.length > 0) {
+      await this.prisma.restaurantModule.createMany({
+        data: data.moduleIds.map(mid => ({ restaurantId: rid, moduleId: mid })),
+      });
+    }
+
+    return { message: `Modules mis à jour pour le restaurant #${rid}`, nbModules: data.moduleIds.length };
   }
 
   @Post('login')
@@ -132,6 +214,83 @@ export class AuthController {
   activerCode(@Body() data: { telephone: string; code: string }) {
     return this.activationService.activerCode(data.telephone, data.code);
   }
+
+  // ============ Nouveau système : Plans + Paiements ============
+
+  // Public : liste des plans disponibles
+  @Get('plans')
+  getPlans() {
+    return this.activationService.getPlans();
+  }
+
+  // Public : infos de paiement (Wave/OM numéros)
+  @Get('config-paiement')
+  getConfigPaiement() {
+    return this.activationService.getConfigPaiement();
+  }
+
+  // Resto admin : initier un paiement d'abonnement
+  @UseGuards(JwtAuthGuard)
+  @Post('paiement-abonnement')
+  initierPaiement(@Body() data: { planId: number; infosPaiement?: string }, @Request() req) {
+    return this.activationService.initierPaiement(req.user.restaurantId, data.planId, data.infosPaiement);
+  }
+
+  // Resto admin : historique de ses paiements
+  @UseGuards(JwtAuthGuard)
+  @Get('mes-paiements')
+  mesPaiements(@Request() req) {
+    return this.activationService.mesPaiements(req.user.restaurantId);
+  }
+
+  // Super admin : liste des paiements en attente
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get('paiements-en-attente')
+  getPaiementsEnAttente() {
+    return this.activationService.getPaiementsEnAttente();
+  }
+
+  // Super admin : confirmer un paiement
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Patch('paiements/:id/confirmer')
+  confirmerPaiement(@Param('id') id: string, @Request() req) {
+    return this.activationService.confirmerPaiement(parseInt(id), req.user.id);
+  }
+
+  // Super admin : rejeter un paiement
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Patch('paiements/:id/rejeter')
+  rejeterPaiement(@Param('id') id: string, @Request() req) {
+    return this.activationService.rejeterPaiement(parseInt(id), req.user.id);
+  }
+
+  // ============ CRUD Plans (Super Admin) ============
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get('plans/all')
+  getAllPlans() {
+    return this.activationService.getAllPlans();
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Post('plans')
+  createPlan(@Body() data: { nom: string; dureeJours: number; prix: number }) {
+    return this.activationService.createPlan(data);
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Patch('plans/:id')
+  updatePlan(@Param('id') id: string, @Body() data: { nom?: string; dureeJours?: number; prix?: number; actif?: boolean }) {
+    return this.activationService.updatePlan(parseInt(id), data);
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Delete('plans/:id')
+  deletePlan(@Param('id') id: string) {
+    return this.activationService.deletePlan(parseInt(id));
+  }
+
+  // ============ Ancien système ============
 
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
   @Post('generer-codes')

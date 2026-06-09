@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -131,8 +131,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 </div>
 
 <div id="app" style="display:none">
-  <!-- Assistant IA -->
-  <div class="assistant-bar">
+  <!-- Assistant IA (caché en attendant la clé API Anthropic) -->
+  <div class="assistant-bar" style="display:none">
     <button class="mic-btn" id="micBtn" onclick="toggleAssistant()" title="Commande vocale">🎤</button>
     <input type="text" id="assistantInput" placeholder="Dites ou écrivez votre commande..." onkeydown="if(event.key==='Enter')sendToAssistant()">
     <button class="send-btn" onclick="sendToAssistant()">➤</button>
@@ -247,6 +247,7 @@ if (savedTableId === tableId) {
 let commandesCount = 0;
 let devise = '€';
 let restaurantNom = 'RestoPro';
+let modeGestion = 'RECEPTION'; // RECEPTION, CAISSE ou SERVEUR
 let currentZoneId = null;
 let currentCoefficient = 1.0;
 
@@ -345,6 +346,7 @@ async function loadRestaurantInfo() {
 	        if (headerNameEl) headerNameEl.textContent = restaurantNom;
       }
 
+      if (info.modeGestion) modeGestion = info.modeGestion;
       // Vérifier si le restaurant est fermé
       if (info.statut === 'FERME') {
         document.getElementById('loading').style.display = 'none';
@@ -523,7 +525,13 @@ async function submitOrder() {
         tableId: parseInt(tableId),
         sessionKey: sessionKey || undefined,
         clientRef: clientId,
-        articles: cart.map(c => ({ menuId: c.menuId, quantite: c.quantite })),
+        articles: cart.map(c => ({
+          menuId: c.menuId,
+          quantite: c.quantite,
+          variantId: c.variantId || undefined,
+          prix: c.prix,
+          nom: c.nom,
+        })),
       }),
     });
     const data = await res.json();
@@ -532,6 +540,7 @@ async function submitOrder() {
           sessionKey = data.session.sessionKey;
           saveSession();
         }
+      if (data.modeGestion) modeGestion = data.modeGestion;
       commandesCount++;
       document.getElementById('ordersLink').classList.add('visible');
       document.getElementById('ordersBadge').textContent = commandesCount;
@@ -543,7 +552,7 @@ async function submitOrder() {
         // Commande à emporter : afficher le numéro unique
         document.getElementById('successTitle').textContent = 'Commande à emporter !';
         document.getElementById('successHint').textContent = 'Présentez ce numéro à la caisse pour retirer votre commande.';
-        document.getElementById('successNumeroCmd').style.display = 'block'; document.getElementById('successSubtitle').textContent = 'Votre commande est transmise directement en cuisine.';
+        document.getElementById('successNumeroCmd').style.display = 'block'; document.getElementById('successSubtitle').textContent = modeGestion === 'CAISSE' ? 'Votre commande a �t� transmise � la caisse.' : 'Votre commande est transmise directement en cuisine.';
         document.getElementById('successNumeroCmdValue').textContent = data.numeroCommande || ('CMD-' + String(data.id).padStart(4, '0'));
         document.getElementById('successInvoiceBtn').style.display = 'none';
       } else {
@@ -551,7 +560,7 @@ async function submitOrder() {
         document.getElementById('successHint').textContent = commandesCount > 1
           ? 'Commande #' + commandesCount + ' de ' + clientId + ' sur table ' + tableId
           : 'D\'autres personnes à votre table peuvent aussi scanner le QR code !';
-        document.getElementById('successNumeroCmd').style.display = 'none'; document.getElementById('successSubtitle').textContent = 'Le serveur va valider votre commande.';
+        document.getElementById('successNumeroCmd').style.display = 'none'; document.getElementById('successSubtitle').textContent = modeGestion === 'CAISSE' ? 'Votre commande a �t� transmise � la caisse.' : 'Le serveur va valider votre commande.';
       }
       document.getElementById('successModal').classList.add('show');
       cart = [];
@@ -621,7 +630,8 @@ async function viewMyOrders() {
           </span>
         </div>
         ${allDetails.map(function(d) {
-          return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>' + d.quantite + 'x ' + (d.menu?.nom || 'Plat') + '</span><span style="color:#666">' + formatPrix(Number(d.prix) * d.quantite) + '</span></div>';
+          var nom = d.variant ? (d.menu?.nom || 'Plat') + ' (' + d.variant.nom + ')' : (d.menu?.nom || 'Plat');
+          return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>' + d.quantite + 'x ' + nom + '</span><span style="color:#666">' + formatPrix(Number(d.prix) * d.quantite) + '</span></div>';
         }).join('')}
         <div style="border-top:1px solid #ddd;margin-top:8px;padding-top:8px;text-align:right;font-weight:700">
           Total: ${formatPrix(grandTotal)}

@@ -20,7 +20,7 @@ export class RestaurantService {
   async getPublicInfo(id: number) {
     const resto = await this.prisma.restaurant.findUnique({
       where: { id },
-      select: { id: true, nom: true, devise: true, statut: true, dateReouverture: true },
+      select: { id: true, nom: true, devise: true, statut: true, dateReouverture: true, modeGestion: true },
     });
     // Vérifier réouverture automatique
     if (resto?.statut === 'FERME' && resto.dateReouverture && new Date() >= resto.dateReouverture) {

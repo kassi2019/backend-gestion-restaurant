@@ -18,11 +18,11 @@ export class CommandesService {
     tableId: number;
     sessionKey?: string;
     clientRef?: string;
-    articles: { menuId: number; quantite: number }[];
+    articles: { menuId: number; quantite: number; variantId?: number; prix?: number; nom?: string }[];
   }) {
     const table = await this.prisma.tableRestaurant.findUnique({
       where: { id: data.tableId },
-      include: { restaurant: { select: { devise: true, id: true, statut: true, dateReouverture: true } } },
+      include: { restaurant: { select: { devise: true, id: true, statut: true, dateReouverture: true, modeGestion: true } } },
     });
 
     if (!table) {
@@ -43,6 +43,8 @@ export class CommandesService {
     }
 
     const isComptoir = table.zone?.toUpperCase() === 'COMPTOIR' || table.numero.toUpperCase() === 'T00' || table.numero.toUpperCase() === 'COMPTOIR';
+    const modeGestion = table.restaurant?.modeGestion || 'RECEPTION';
+    const isModeCaisse = modeGestion === 'CAISSE';
 
     // Auto-create or find session
     let session;
@@ -71,18 +73,23 @@ export class CommandesService {
         where: { id: article.menuId },
       });
       if (menu) {
-        const sousTotal = Number(menu.prix) * article.quantite;
+        // Prix fourni par le client (variante) ou prix du menu parent
+        const prixUnitaire = article.prix ? Number(article.prix) : Number(menu.prix);
+        const sousTotal = prixUnitaire * article.quantite;
         montantTotal += sousTotal;
         detailsData.push({
           menuId: article.menuId,
           quantite: article.quantite,
-          prix: menu.prix,
+          prix: prixUnitaire,
+          variantId: article.variantId || null,
         });
       }
     }
 
     const typeCommande = isComptoir ? 'A_EMPORTER' : 'SUR_PLACE';
-    const statutInitial = 'EN_ATTENTE'; // Toujours EN_ATTENTE, le réceptionniste valide
+    // En mode CAISSE: commande directement validée (pas de validation réceptionniste)
+    // En mode RECEPTION/SERVEUR: EN_ATTENTE, le réceptionniste valide
+    const statutInitial = isModeCaisse ? 'VALIDEE' : 'EN_ATTENTE';
 
     const commande = await this.prisma.commande.create({
       data: {
@@ -108,27 +115,97 @@ export class CommandesService {
 
     const devise = table.restaurant?.devise || '€';
     const numeroCommande = `CMD-${String(commande.id).padStart(4, '0')}`;
-
-    // Notifier les réceptionnistes (toutes les commandes passent par la réception)
     const prefixe = isComptoir ? 'comptoir' : `table ${table.numero}`;
-    const label = `Nouvelle commande ${prefixe} — ${Number(commande.montantTotal).toFixed(2)} ${devise}`;
 
-    this.socketGateway.notifierReception(commande);
-    const receptionnistes = await this.prisma.utilisateur.findMany({
-      where: { restaurantId: table.restaurantId, role: 'RECEPTIONNISTE', statut: 'ACTIF' },
-      select: { id: true },
-    });
-    for (const r of receptionnistes) {
-      await this.notificationsService.create(r.id, label);
+    if (isModeCaisse) {
+      // ---- MODE CAISSE : commande directement validée, notifier les caissiers ----
+
+      // Table → OCCUPEE
+      await this.prisma.tableRestaurant.update({
+        where: { id: data.tableId },
+        data: { statut: 'OCCUPEE' },
+      });
+
+      // Décrémenter le stock
+      for (const d of detailsData) {
+        try { await this.menuService.decrementStock(d.menuId, d.quantite); } catch {}
+      }
+
+      // Notifier les caissiers
+      const labelCaisse = `💰 Nouvelle commande ${prefixe} — ${Number(commande.montantTotal).toFixed(2)} ${devise}`;
+      this.socketGateway.notifierCaisse(commande);
+      this.socketGateway.server.to('admin').emit('nouvelle_commande_caisse', commande);
+
+      const caissiers = await this.prisma.utilisateur.findMany({
+        where: { restaurantId: table.restaurantId, role: 'CAISSIER', statut: 'ACTIF' },
+        select: { id: true },
+      });
+      for (const c of caissiers) {
+        await this.notificationsService.create(c.id, labelCaisse);
+      }
+
+      // Notifier aussi les admins/managers (ils peuvent encaisser aussi)
+      const admins = await this.prisma.utilisateur.findMany({
+        where: { restaurantId: table.restaurantId, role: { in: ['ADMIN', 'MANAGER'] }, statut: 'ACTIF' },
+        select: { id: true },
+      });
+      for (const a of admins) {
+        await this.notificationsService.create(a.id, labelCaisse);
+      }
+
+      // Notifier cuisine/bar directement (pas besoin d'attendre la réception)
+      const aCuisine = (commande as any).details?.some((d: any) =>
+        ['CUISINE', 'DESSERT'].includes(d.menu?.categorie?.destination),
+      );
+      const aBar = (commande as any).details?.some((d: any) =>
+        d.menu?.categorie?.destination === 'BAR',
+      );
+
+      if (aCuisine) {
+        this.socketGateway.notifierCuisine(commande);
+        const cuisineUsers = await this.prisma.utilisateur.findMany({
+          where: { restaurantId: table.restaurantId, role: 'CUISINE', statut: 'ACTIF' },
+          select: { id: true },
+        });
+        for (const u of cuisineUsers) {
+          await this.notificationsService.create(u.id, `🍳 Nouvelle commande table ${table.numero} — ${Number(commande.montantTotal).toFixed(2)} ${devise}`);
+        }
+      }
+
+      if (aBar) {
+        this.socketGateway.notifierBar(commande);
+        const barUsers = await this.prisma.utilisateur.findMany({
+          where: { restaurantId: table.restaurantId, role: 'BAR', statut: 'ACTIF' },
+          select: { id: true },
+        });
+        for (const u of barUsers) {
+          await this.notificationsService.create(u.id, `🍹 Nouvelle commande table ${table.numero} — ${Number(commande.montantTotal).toFixed(2)} ${devise}`);
+        }
+      }
+
+    } else {
+      // ---- MODE RECEPTION/SERVEUR : circuit classique ----
+
+      const label = `Nouvelle commande ${prefixe} — ${Number(commande.montantTotal).toFixed(2)} ${devise}`;
+
+      this.socketGateway.notifierReception(commande);
+      const receptionnistes = await this.prisma.utilisateur.findMany({
+        where: { restaurantId: table.restaurantId, role: 'RECEPTIONNISTE', statut: 'ACTIF' },
+        select: { id: true },
+      });
+      for (const r of receptionnistes) {
+        await this.notificationsService.create(r.id, label);
+      }
+
+      // Notifier les admins
+      this.socketGateway.server.to('admin').emit('nouvelle_commande', commande);
     }
-
-    // Notifier les admins
-    this.socketGateway.server.to('admin').emit('nouvelle_commande', commande);
 
     return {
       ...commande,
       numeroCommande,
       isComptoir,
+      modeGestion,
     };
   }
 
@@ -645,7 +722,7 @@ export class CommandesService {
         statut: { not: 'PAYEE' }, // Ne pas retourner les commandes déjà payées
       },
       include: {
-        details: { include: { menu: true } },
+        details: { include: { menu: true, variant: true } },
         table: { select: { numero: true, id: true } },
         session: { select: { sessionKey: true, dateArrivee: true } },
         serveur: { select: { id: true, nom: true } },
@@ -677,7 +754,7 @@ export class CommandesService {
     const commandes = await this.prisma.commande.findMany({
       where: { sessionId: session.id },
       include: {
-        details: { include: { menu: true } },
+        details: { include: { menu: true, variant: true } },
         table: { select: { numero: true } },
         session: { select: { sessionKey: true, dateArrivee: true } },
       },
@@ -705,7 +782,7 @@ export class CommandesService {
         session: { dateArrivee: { gte: today, lt: tomorrow } },
       },
       include: {
-        details: { include: { menu: true } },
+        details: { include: { menu: true, variant: true } },
         table: { select: { numero: true, id: true } },
         session: { select: { sessionKey: true, dateArrivee: true } },
         serveur: { select: { id: true, nom: true } },

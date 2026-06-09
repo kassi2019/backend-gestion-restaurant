@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
   Request,
+  ForbiddenException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -20,19 +21,19 @@ import { Role, StatutUtilisateur } from '@prisma/client';
 export class UsersController {
   constructor(private usersService: UsersService) {}
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER)
   @Get()
   findAll(@Request() req) {
     return this.usersService.findAll(req.user.restaurantId);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE)
   @Get('role/:role')
   findByRole(@Request() req, @Param('role') role: Role) {
     return this.usersService.findByRole(req.user.restaurantId, role);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER)
   @Patch(':id')
   update(
     @Param('id') id: string,
@@ -43,11 +44,16 @@ export class UsersController {
       role?: Role;
       mot_de_passe?: string;
     },
+    @Request() req,
   ) {
+    // Seul le SUPER_ADMIN peut changer le rôle (et donc les modules)
+    if (data.role && req.user.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Seul le Super Admin peut changer le rôle d\'un utilisateur');
+    }
     return this.usersService.update(+id, data);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER)
   @Patch(':id/statut')
   updateStatut(
     @Param('id') id: string,
@@ -56,7 +62,7 @@ export class UsersController {
     return this.usersService.updateStatut(+id, statut);
   }
 
-  @Roles(Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Delete(':id')
   supprimer(@Param('id') id: string) {
     return this.usersService.supprimer(+id);
