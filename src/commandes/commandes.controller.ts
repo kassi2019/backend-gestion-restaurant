@@ -43,8 +43,14 @@ export class CommandesController {
   }
 
   @Post('client')
-  createFromClient(@Body() data: { tableId: number; sessionKey?: string; articles: { menuId: number; quantite: number }[] }) {
+  createFromClient(@Body() data: { tableId: number; sessionKey?: string; deviceId?: string; articles: { menuId: number; quantite: number }[] }) {
     return this.commandesService.createFromClient(data);
+  }
+
+  // Retrouver les commandes non payées d'un device (téléphone client)
+  @Get('client-device/:deviceId')
+  findByDeviceId(@Param('deviceId') deviceId: string) {
+    return this.commandesService.findByDeviceId(deviceId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

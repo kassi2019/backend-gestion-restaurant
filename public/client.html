@@ -231,8 +231,18 @@ const params = new URLSearchParams(window.location.search);
 const tableId = params.get('tableId') || '1';
 const restaurantId = params.get('restaurantId') || '1';
 
+// ─── Device ID unique (survit à toutes les tables, rafraîchissements, etc.) ──
+function generateDeviceId() {
+  return 'DEV-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
+}
+var deviceId = localStorage.getItem('rp_deviceId');
+if (!deviceId) {
+  deviceId = generateDeviceId();
+  localStorage.setItem('rp_deviceId', deviceId);
+}
+
 // Persistance localStorage : survit au rechargement de la page
-// On vérifie que c'est la même table (sinon on réinitialise)
+// On vérifie que c'est la même table (sinon on réinitialise la session mais garde le deviceId)
 const savedTableId = localStorage.getItem('rp_tableId');
 if (savedTableId === tableId) {
   var sessionKey = localStorage.getItem('rp_sessionKey') || '';
@@ -243,6 +253,7 @@ if (savedTableId === tableId) {
   var clientId = 'CLI-' + Math.random().toString(36).substr(2, 4).toUpperCase();
   localStorage.removeItem('rp_sessionKey');
   localStorage.removeItem('rp_clientId');
+  localStorage.removeItem('rp_tableId');
 }
 let commandesCount = 0;
 let devise = '€';
@@ -274,6 +285,50 @@ function saveSession() {
     localStorage.setItem('rp_sessionKey', sessionKey);
     localStorage.setItem('rp_clientId', clientId);
     localStorage.setItem('rp_tableId', tableId);
+  } catch(e) { /* ignore */ }
+}
+
+// Retrouver TOUTES les commandes non payées de ce device (même d'une autre table)
+async function restoreByDeviceId() {
+  try {
+    const res = await fetch('/api/commandes/client-device/' + deviceId);
+    const commandes = await res.json();
+    if (Array.isArray(commandes) && commandes.length > 0) {
+      const actives = commandes.filter(function(c) {
+        return c.statut !== 'PAYEE' && c.statut !== 'ANNULEE';
+      });
+      if (actives.length > 0) {
+        // Trouver la première table où le client a commandé
+        const tablesLiees = [];
+        const seenTables = {};
+        actives.forEach(function(c) {
+          const tid = c.table?.id;
+          if (tid && !seenTables[tid]) {
+            seenTables[tid] = true;
+            tablesLiees.push({ id: tid, numero: c.table?.numero || '?', restaurantId: c.table?.restaurantId });
+          }
+        });
+        commandesCount = actives.length;
+        document.getElementById('ordersLink').classList.add('visible');
+        document.getElementById('ordersBadge').textContent = commandesCount;
+
+        // Si le client est sur une table différente de celle de ses commandes
+        const currentTableId = parseInt(tableId);
+        const autreTable = tablesLiees.find(function(t) { return t.id !== currentTableId; });
+        if (autreTable) {
+          showToast('📱 Vous avez ' + actives.length + ' commande(s) en cours sur la Table ' + autreTable.numero + '. Allez-y pour continuer.', true);
+        } else {
+          showToast('🔄 ' + actives.length + ' commande(s) en cours retrouvee(s)', false);
+          // Mettre à jour la sessionKey depuis la commande la plus récente
+          if (!sessionKey && actives[0]?.session?.sessionKey) {
+            sessionKey = actives[0].session.sessionKey;
+            localStorage.setItem('rp_sessionKey', sessionKey);
+            localStorage.setItem('rp_tableId', tableId);
+          }
+        }
+        updateInvoiceButton(actives);
+      }
+    }
   } catch(e) { /* ignore */ }
 }
 
@@ -525,6 +580,7 @@ async function submitOrder() {
         tableId: parseInt(tableId),
         sessionKey: sessionKey || undefined,
         clientRef: clientId,
+        deviceId: deviceId,
         articles: cart.map(c => ({
           menuId: c.menuId,
           quantite: c.quantite,
@@ -736,6 +792,7 @@ function showToast(msg, isError = false) {
 
 loadMenu();
 restoreSession();
+restoreByDeviceId();
 connectSocketClient();
 
 // ======= ASSISTANT IA =======

@@ -41,6 +41,31 @@ export interface PrinterConfig {
   autoPrint: boolean;
 }
 
+export type TicketDestination = 'CUISINE' | 'BAR' | 'SERVEUR' | 'CAISSE';
+
+/** Remplace les caractères accentués par leur équivalent sans accent
+ *  pour les imprimantes thermiques qui ne les supportent pas. */
+export function normalizeText(texte: string): string {
+  const MAP: Record<string, string> = {
+    'À':'A','Á':'A','Â':'A','Ã':'A','Ä':'A','Å':'A',
+    'à':'a','á':'a','â':'a','ã':'a','ä':'a','å':'a',
+    'Ç':'C','ç':'c',
+    'È':'E','É':'E','Ê':'E','Ë':'E',
+    'è':'e','é':'e','ê':'e','ë':'e',
+    'Ì':'I','Í':'I','Î':'I','Ï':'I',
+    'ì':'i','í':'i','î':'i','ï':'i',
+    'Ò':'O','Ó':'O','Ô':'O','Õ':'O','Ö':'O',
+    'ò':'o','ó':'o','ô':'o','õ':'o','ö':'o',
+    'Ù':'U','Ú':'U','Û':'U','Ü':'U',
+    'ù':'u','ú':'u','û':'u','ü':'u',
+    'Ñ':'N','ñ':'n',
+    'Œ':'OE','œ':'oe',
+    'ß':'ss',
+    'ÿ':'y','Ÿ':'Y',
+  };
+  return texte.split('').map(c => MAP[c] || c).join('');
+}
+
 export interface ReceiptData {
   titre: string;
   sousTitre?: string;
@@ -73,6 +98,31 @@ export class PrinterService {
       shareName: this.configService.get('PRINTER_SHARE') || 'RECU',
       charWidth: parseInt(this.configService.get('PRINTER_CHAR_WIDTH') || '42', 10),
       autoPrint: this.configService.get('PRINTER_AUTO_PRINT') !== 'false',
+    };
+  }
+
+  /** Retourne la config de l'imprimante pour une destination donnée.
+   *  Si une config spécifique est définie (ex: PRINTER_NAME_CUISINE), elle est utilisée.
+   *  Sinon, hérite de la config principale. */
+  getConfigForDestination(destination: TicketDestination): PrinterConfig {
+    const base = this.getConfig();
+    const suffix = `_${destination}`;
+
+    const type = this.configService.get(`PRINTER_TYPE${suffix}`) as PrinterConfig['type'];
+    const ip = this.configService.get(`PRINTER_IP${suffix}`);
+    const port = this.configService.get(`PRINTER_PORT${suffix}`);
+    const name = this.configService.get(`PRINTER_NAME${suffix}`);
+    const shareName = this.configService.get(`PRINTER_SHARE${suffix}`);
+    const charWidth = this.configService.get(`PRINTER_CHAR_WIDTH${suffix}`);
+
+    return {
+      type: type || base.type,
+      ip: ip || base.ip,
+      port: port ? parseInt(port, 10) : base.port,
+      name: name || base.name,
+      shareName: shareName || base.shareName,
+      charWidth: charWidth ? parseInt(charWidth, 10) : base.charWidth,
+      autoPrint: base.autoPrint,
     };
   }
 
@@ -239,6 +289,17 @@ export class PrinterService {
     }
 
     try {
+      // Normaliser les données pour éviter les problèmes d'accents
+      data = {
+        ...data,
+        titre: normalizeText(data.titre),
+        sousTitre: data.sousTitre ? normalizeText(data.sousTitre) : undefined,
+        numero: normalizeText(data.numero),
+        lignes: data.lignes.map(l => ({ label: normalizeText(l.label), valeur: normalizeText(l.valeur) })),
+        articles: data.articles.map(a => ({ ...a, nom: normalizeText(a.nom) })),
+        modePaiement: normalizeText(data.modePaiement),
+        piedPage: data.piedPage?.map(p => normalizeText(p)),
+      };
       if (config.type === 'NETWORK') {
         // Réseau : ESC/POS direct via TCP
         const buffer = this.buildReceiptBuffer(data, config.charWidth);
@@ -248,7 +309,8 @@ export class PrinterService {
 
       if (config.type === 'WINDOWS') {
         // Windows USB : texte simple via Out-Printer (le pilote filtre ESC/POS)
-        const texte = this.buildPlainTextReceipt(data, config.charWidth);
+        let texte = this.buildPlainTextReceipt(data, config.charWidth);
+        texte = normalizeText(texte);
         await this.sendTextToWindowsPrinter(config, texte);
         return { ok: true, message: `Reçu envoyé à "${config.name}"` };
       }
@@ -370,19 +432,20 @@ export class PrinterService {
 
   // ─── Impression ticket générique (réception, cuisine, bar) ──────
 
-  async printTicket(contenu: string): Promise<{ ok: boolean; message: string }> {
-    const config = this.getConfig();
+  async printTicket(contenu: string, destination?: TicketDestination): Promise<{ ok: boolean; message: string }> {
+    const config = destination ? this.getConfigForDestination(destination) : this.getConfig();
+    const texteNormalise = normalizeText(contenu);
     if (config.type === 'NONE') {
       return { ok: false, message: 'Impression désactivée' };
     }
     try {
       if (config.type === 'NETWORK') {
-        await this.sendRawToNetwork(config, Buffer.from(contenu + '\r\n\r\n\r\n' + CMDS.CUT_PARTIAL, 'latin1'));
-        return { ok: true, message: 'Ticket envoyé' };
+        await this.sendRawToNetwork(config, Buffer.from(texteNormalise + '\r\n\r\n\r\n' + CMDS.CUT_PARTIAL, 'latin1'));
+        return { ok: true, message: `Ticket${destination ? ' ' + destination : ''} envoyé` };
       }
       if (config.type === 'WINDOWS') {
-        await this.sendTextToWindowsPrinter(config, contenu);
-        return { ok: true, message: `Ticket envoyé à "${config.name}"` };
+        await this.sendTextToWindowsPrinter(config, texteNormalise);
+        return { ok: true, message: `Ticket${destination ? ' ' + destination : ''} envoyé à "${config.name}"` };
       }
       return { ok: false, message: 'Type inconnu' };
     } catch (err: any) {

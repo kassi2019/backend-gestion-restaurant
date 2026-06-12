@@ -1,0 +1,2 @@
+ALTER TABLE commandes ADD COLUMN device_id VARCHAR(64) NULL;
+

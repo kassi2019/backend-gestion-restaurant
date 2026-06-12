@@ -18,6 +18,7 @@ export class CommandesService {
     tableId: number;
     sessionKey?: string;
     clientRef?: string;
+    deviceId?: string;
     articles: { menuId: number; quantite: number; variantId?: number; prix?: number; nom?: string }[];
   }) {
     const table = await this.prisma.tableRestaurant.findUnique({
@@ -91,12 +92,13 @@ export class CommandesService {
     // En mode RECEPTION/SERVEUR: EN_ATTENTE, le réceptionniste valide
     const statutInitial = isModeCaisse ? 'VALIDEE' : 'EN_ATTENTE';
 
-    const commande = await this.prisma.commande.create({
+    const commande = await (this.prisma.commande as any).create({
       data: {
         tableId: data.tableId,
         serveurId: table.serveurId || null,
         sessionId: session.id,
         clientRef: data.clientRef || null,
+        deviceId: data.deviceId || null,
         montantTotal,
         typeCommande: typeCommande as any,
         statut: statutInitial as any,
@@ -1110,6 +1112,33 @@ export class CommandesService {
       include: {
         table: { select: { numero: true } },
         details: { include: { menu: { select: { nom: true } } } },
+      },
+      orderBy: { dateCommande: 'desc' },
+    });
+  }
+
+  /** Retrouve les commandes non payées d'un device (téléphone client).
+   *  Permet au client de retrouver ses commandes après rafraîchissement
+   *  ou changement de table. */
+  async findByDeviceId(deviceId: string) {
+    const debutJour = new Date();
+    debutJour.setHours(0, 0, 0, 0);
+
+    return (this.prisma.commande as any).findMany({
+      where: {
+        deviceId,
+        statutPaiement: 'NON_PAYEE',
+        statut: { notIn: ['ANNULEE'] },
+        dateCommande: { gte: debutJour },
+      },
+      include: {
+        session: { select: { sessionKey: true } },
+        table: { select: { id: true, numero: true, restaurantId: true } },
+        details: {
+          include: {
+            menu: { select: { id: true, nom: true, prix: true, image: true } },
+          },
+        },
       },
       orderBy: { dateCommande: 'desc' },
     });

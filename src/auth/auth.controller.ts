@@ -41,23 +41,29 @@ export class AuthController {
       return this.prisma.module.findMany({ orderBy: { ordre: 'asc' } });
     }
 
-    // Admin/Manager/etc : modules filtrés par RestaurantModule
-    const restaurantModules = await this.prisma.restaurantModule.findMany({
-      where: { restaurantId: req.user.restaurantId },
+    // Admin/Manager/etc : uniquement les modules attribués à cet utilisateur
+    const userModules = await this.prisma.userModule.findMany({
+      where: { utilisateurId: req.user.id },
       include: { module: true },
+      orderBy: { module: { ordre: 'asc' } },
     });
 
-    if (restaurantModules.length === 0) {
-      return [];
-    }
-
-    return restaurantModules.map(rm => rm.module).sort((a, b) => a.ordre - b.ordre);
+    return userModules.map(um => um.module);
   }
 
-  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @UseGuards(JwtAuthGuard)
   @Post('users/:userId/modules')
-  async updateUserModules(@Param('userId') userId: string, @Body() data: { moduleIds: number[] }) {
+  async updateUserModules(@Param('userId') userId: string, @Body() data: { moduleIds: number[] }, @Request() req) {
     const uid = parseInt(userId);
+
+    // Vérifier que l'utilisateur connecté a le droit (SuperAdmin, Admin ou Manager)
+    const superAdminIds = (process.env.SUPER_ADMIN_IDS || '').split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+    const isSuperAdmin = superAdminIds.includes(req.user.id) || req.user.role === 'SUPER_ADMIN';
+    const isAdminManager = req.user.role === 'ADMIN' || req.user.role === 'MANAGER';
+
+    if (!isSuperAdmin && !isAdminManager) {
+      return { message: 'Action non autorisée', error: 'Rôle insuffisant' };
+    }
 
     // Trouver le restaurant de l'utilisateur cible
     const targetUser = await this.prisma.utilisateur.findUnique({
@@ -66,12 +72,29 @@ export class AuthController {
     });
     if (!targetUser) return { message: 'Utilisateur introuvable' };
 
-    // Vérifier que les modules demandés sont autorisés pour ce restaurant
-    const allowedModules = await this.prisma.restaurantModule.findMany({
-      where: { restaurantId: targetUser.restaurantId },
-      select: { moduleId: true },
-    });
-    const allowedIds = new Set(allowedModules.map(m => m.moduleId));
+    // Un Admin/Manager ne peut modifier que les utilisateurs de son propre restaurant
+    if (isAdminManager && targetUser.restaurantId !== req.user.restaurantId) {
+      return { message: 'Action non autorisée', error: 'Restaurant différent' };
+    }
+
+    // Déterminer les modules autorisés
+    let allowedIds: Set<number>;
+
+    if (isSuperAdmin) {
+      // SuperAdmin : modules dans le périmètre du restaurant
+      const allowedModules = await this.prisma.restaurantModule.findMany({
+        where: { restaurantId: targetUser.restaurantId },
+        select: { moduleId: true },
+      });
+      allowedIds = new Set(allowedModules.map(m => m.moduleId));
+    } else {
+      // Admin/Manager : uniquement les modules qu'il possède lui-même
+      const userModules = await this.prisma.userModule.findMany({
+        where: { utilisateurId: req.user.id },
+        select: { moduleId: true },
+      });
+      allowedIds = new Set(userModules.map(m => m.moduleId));
+    }
 
     const validIds = data.moduleIds.filter(id => allowedIds.has(id));
     const refused = data.moduleIds.filter(id => !allowedIds.has(id));
@@ -86,7 +109,7 @@ export class AuthController {
     return {
       message: 'Modules mis à jour',
       attribues: validIds.length,
-      refuses: refused.length > 0 ? `${refused.length} module(s) non autorisé(s) pour ce restaurant` : undefined,
+      refuses: refused.length > 0 ? `${refused.length} module(s) non autorisé(s)` : undefined,
     };
   }
 

@@ -240,6 +240,7 @@ model Commande {
   caissierId      Int?              @map("caissier_id")
   caissier        Utilisateur?      @relation("CaissierPaiements", fields: [caissierId], references: [id])
   clientRef       String?           @map("client_ref") @db.VarChar(20)
+  deviceId        String?           @map("device_id") @db.VarChar(64)
   typeCommande    TypeCommande      @default(SUR_PLACE) @map("type_commande")
   adresseLivraison String?          @map("adresse_livraison") @db.Text
   fraisLivraison   Decimal?         @map("frais_livraison") @db.Decimal(10, 2)

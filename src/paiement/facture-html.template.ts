@@ -26,16 +26,18 @@ export function genererFactureHTML(data: FactureData): string {
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Courier New', monospace; background: #fff; color: #000; padding: 20px; max-width: 320px; margin: 0 auto; }
   .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 12px; margin-bottom: 12px; }
-  .header h1 { font-size: 18px; margin-bottom: 4px; }
+  .header h1 { font-size: 18px; margin-bottom: 4px; font-weight: bold; }
   .header p { font-size: 11px; color: #333; }
   .info { font-size: 11px; margin-bottom: 10px; }
   .info div { display: flex; justify-content: space-between; padding: 2px 0; }
+  .info strong { font-weight: bold; }
   .divider { border-top: 1px dashed #000; margin: 10px 0; }
   table { width: 100%; font-size: 12px; border-collapse: collapse; }
-  th { text-align: left; padding: 4px 0; font-size: 10px; border-bottom: 1px solid #ccc; }
+  th { text-align: left; padding: 4px 0; font-size: 10px; border-bottom: 1px solid #ccc; font-weight: bold; }
   td { padding: 5px 0; border-bottom: 1px dotted #eee; }
   .qty { width: 30px; }
   .price { text-align: right; width: 70px; }
+  .article { word-break: break-word; }
   .total-row { font-weight: bold; font-size: 16px; }
   .total-row td { padding-top: 10px; border: none; }
   .footer { text-align: center; font-size: 11px; margin-top: 20px; color: #666; }
@@ -45,9 +47,11 @@ export function genererFactureHTML(data: FactureData): string {
     body { padding: 3mm; width: 80mm; margin: 0; color: #000 !important; background: #fff !important; }
     .no-print { display: none !important; }
     html, body { height: auto; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    /* Forcer le gras à l'impression (les navigateurs l'atténuent par défaut) */
+    h1, th, strong, .total-row, .info strong { font-weight: bold !important; }
   }
   .no-print { text-align: center; margin-top: 20px; }
-  .print-btn { background: #E86B2A; color: white; border: none; padding: 10px 30px; border-radius: 20px; font-size: 14px; cursor: pointer; }
+  .print-btn { background: #E86B2A; color: white; border: none; padding: 10px 30px; border-radius: 20px; font-size: 14px; cursor: pointer; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -68,11 +72,11 @@ export function genererFactureHTML(data: FactureData): string {
   <div class="divider"></div>
 
   <table>
-    <tr><th class="qty">Qté</th><th>Article</th><th class="price">P.U.</th><th class="price">Total</th></tr>
+    <tr><th class="qty">Qté</th><th class="article">Article</th><th class="price">P.U.</th><th class="price">Total</th></tr>
     ${data.articles.map((a) => `
     <tr>
       <td class="qty">x${a.quantite}</td>
-      <td>${a.nom}</td>
+      <td class="article">${a.nom}</td>
       <td class="price">${a.prix.toFixed(2)} ${d}</td>
       <td class="price">${a.total.toFixed(2)} ${d}</td>
     </tr>`).join('')}
