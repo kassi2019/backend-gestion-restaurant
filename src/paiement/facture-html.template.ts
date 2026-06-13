@@ -6,7 +6,7 @@ interface FactureData {
   serveur: string;
   caissier: string;
   modePaiement: string;
-  articles: { quantite: number; nom: string; prix: number; total: number }[];
+  articles: { quantite: number; nom: string; variant?: string | null; prix: number; total: number }[];
   total: number;
   remise?: { type: string; valeur: number; motif?: string } | null;
 }
@@ -36,7 +36,7 @@ export function genererFactureHTML(data: FactureData): string {
   th { text-align: left; padding: 4px 0; font-size: 10px; border-bottom: 1px solid #ccc; font-weight: bold; }
   td { padding: 5px 0; border-bottom: 1px dotted #eee; }
   .qty { width: 30px; }
-  .price { text-align: right; width: 70px; }
+  .price { text-align: right; width: 85px; padding-right: 8px; }
   .article { word-break: break-word; }
   .total-row { font-weight: bold; font-size: 16px; }
   .total-row td { padding-top: 10px; border: none; }
@@ -76,7 +76,7 @@ export function genererFactureHTML(data: FactureData): string {
     ${data.articles.map((a) => `
     <tr>
       <td class="qty">x${a.quantite}</td>
-      <td class="article">${a.nom}</td>
+      <td class="article">${a.variant ? `${a.nom}<br><small style="color:#666">${a.variant}</small>` : a.nom}</td>
       <td class="price">${a.prix.toFixed(2)} ${d}</td>
       <td class="price">${a.total.toFixed(2)} ${d}</td>
     </tr>`).join('')}

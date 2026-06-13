@@ -179,7 +179,7 @@ export class PaiementService {
         commande: {
           include: {
             table: { include: { restaurant: { select: { nom: true, adresse: true, devise: true } } } },
-            details: { include: { menu: true } },
+            details: { include: { menu: true, variant: true } },
             serveur: { select: { nom: true } },
           },
         },
@@ -194,9 +194,10 @@ export class PaiementService {
 
     const resto = facture.commande.table.restaurant;
     const cmd = facture.commande;
-    const articles = cmd.details.map((d) => ({
+    const articles = cmd.details.map((d: any) => ({
       quantite: d.quantite,
       nom: d.menu?.nom || 'Plat',
+      variant: d.variant?.nom || null,
       prix: Number(d.prix),
       total: Number(d.prix) * d.quantite,
     }));

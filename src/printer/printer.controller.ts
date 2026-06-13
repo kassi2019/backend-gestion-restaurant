@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  // Request,
+} from '@nestjs/common';
 import { PrinterService, TicketDestination } from './printer.service';
 import { PaiementService } from '../paiement/paiement.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -48,20 +56,23 @@ export class PrinterController {
     // Imprimer un ticket test
     const testData = {
       titre: 'TEST IMPRESSION',
-      sousTitre: 'Si vous voyez ce ticket,\nl\'imprimante est bien configurée !',
+      sousTitre: "Si vous voyez ce ticket,\nl'imprimante est bien configurée !",
       numero: 'TEST-0001',
       date: new Date().toLocaleDateString('fr-FR'),
       heure: new Date().toLocaleTimeString('fr-FR'),
       lignes: [
         { label: 'Imprimante', valeur: this.printerService.getConfig().type },
-        { label: 'Connexion', valeur: testResult.message.split(' — ')[0] || testResult.message },
+        {
+          label: 'Connexion',
+          valeur: testResult.message.split(' — ')[0] || testResult.message,
+        },
       ],
       articles: [
-        { quantite: 1, nom: 'Plat test', prix: 12.00, total: 12.00 },
-        { quantite: 2, nom: 'Boisson test', prix: 3.50, total: 7.00 },
+        { quantite: 1, nom: 'Plat test', prix: 12.0, total: 12.0 },
+        { quantite: 2, nom: 'Boisson test', prix: 3.5, total: 7.0 },
       ],
       devise: '€',
-      total: 19.00,
+      total: 19.0,
       modePaiement: 'TEST',
       piedPage: ['✅ Imprimante configurée avec succès !'],
     };
@@ -71,15 +82,41 @@ export class PrinterController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.MANAGER, Role.CAISSIER, Role.RECEPTIONNISTE, Role.SERVEUR, Role.CUISINE, Role.BAR)
+  @Roles(
+    Role.ADMIN,
+    Role.MANAGER,
+    Role.CAISSIER,
+    Role.RECEPTIONNISTE,
+    Role.SERVEUR,
+    Role.CUISINE,
+    Role.BAR,
+  )
   @Post('ticket')
-  async printTicket(@Body() data: { contenu: string; titre?: string; destination?: TicketDestination }) {
-    const result = await this.printerService.printTicket(data.contenu, data.destination);
+  async printTicket(
+    @Body()
+    data: {
+      contenu: string;
+      titre?: string;
+      destination?: TicketDestination;
+    },
+  ) {
+    const result = await this.printerService.printTicket(
+      data.contenu,
+      data.destination,
+    );
     return result;
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.MANAGER, Role.CAISSIER, Role.RECEPTIONNISTE, Role.SERVEUR, Role.CUISINE, Role.BAR)
+  @Roles(
+    Role.ADMIN,
+    Role.MANAGER,
+    Role.CAISSIER,
+    Role.RECEPTIONNISTE,
+    Role.SERVEUR,
+    Role.CUISINE,
+    Role.BAR,
+  )
   @Post('commande/:id/tickets')
   async printCommandeTickets(@Param('id') id: string) {
     const commande = await this.prisma.commande.findUnique({
@@ -105,13 +142,22 @@ export class PrinterController {
 
     const restaurantId = commande.table?.restaurantId;
     const devise = restaurantId
-      ? (await this.prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { devise: true } }))?.devise || '€'
+      ? (
+          await this.prisma.restaurant.findUnique({
+            where: { id: restaurantId },
+            select: { devise: true },
+          })
+        )?.devise || '€'
       : '€';
 
     const tableNumero = commande.table?.numero || '?';
     const serveurNom = commande.serveur?.nom || 'Sans serveur';
     const dateStr = new Date(commande.dateCommande).toLocaleString('fr-FR', {
-      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
     const cmdRef = 'CMD-' + String(commande.id).padStart(4, '0');
     const width = 42;
@@ -122,12 +168,18 @@ export class PrinterController {
     const groupes: Record<string, any[]> = {
       CUISINE: commande.details.filter(d =>
         ['CUISINE', 'DESSERT'].includes(d.menu?.categorie?.destination || '')),
-      BAR: commande.details.filter(d =>
-        d.menu?.categorie?.destination === 'BAR'),
+      BAR: commande.details.filter(
+        (d) => d.menu?.categorie?.destination === 'BAR',
+      ),
       SERVEUR: commande.details,
     };
 
-    const destinations: { key: TicketDestination; titre: string; avecPrix: boolean; avecTotal: boolean }[] = [
+    const destinations: {
+      key: TicketDestination;
+      titre: string;
+      avecPrix: boolean;
+      avecTotal: boolean;
+    }[] = [
       { key: 'CUISINE', titre: 'CUISINE', avecPrix: false, avecTotal: false },
       { key: 'BAR', titre: 'BAR', avecPrix: false, avecTotal: false },
       { key: 'SERVEUR', titre: 'SERVEUR', avecPrix: true, avecTotal: true },
@@ -157,11 +209,17 @@ export class PrinterController {
           ? `${(Number(d.prix || 0) * d.quantite).toFixed(2)} ${devise}`
           : '';
         // Largeur dispo pour le nom = largeur totale - qté - espace - prix - espace
-        const maxNom = Math.max(10, width - qte.length - 1 - prixStr.length - (dest.avecPrix ? 1 : 0));
+        const maxNom = Math.max(
+          10,
+          width - qte.length - 1 - prixStr.length - (dest.avecPrix ? 1 : 0),
+        );
         const nomBrut = d.menu?.nom || 'Plat';
         const nom = nomBrut.length > maxNom ? nomBrut.substring(0, maxNom) : nomBrut;
         if (dest.avecPrix) {
-          const esp = Math.max(1, width - qte.length - nom.length - prixStr.length);
+          const esp = Math.max(
+            1,
+            width - qte.length - nom.length - prixStr.length,
+          );
           lines.push(`${qte} ${nom}${' '.repeat(esp)}${prixStr}`);
         } else {
           lines.push(`${qte} ${nom}`);
@@ -171,7 +229,13 @@ export class PrinterController {
       if (dest.avecTotal) {
         const total = Number(commande.montantTotal || 0).toFixed(2);
         lines.push(dash);
-        lines.push('TOTAL' + ' '.repeat(Math.max(1, width - 5 - total.length - devise.length - 1)) + `${total} ${devise}`);
+        lines.push(
+          'TOTAL' +
+            ' '.repeat(
+              Math.max(1, width - 5 - total.length - devise.length - 1),
+            ) +
+            `${total} ${devise}`,
+        );
       }
       lines.push(dash);
 
@@ -198,8 +262,15 @@ export class PrinterController {
       titre: data.restaurant.nom,
       sousTitre: data.restaurant.adresse,
       numero: data.numero,
-      date: new Date(data.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
-      heure: new Date(data.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      date: new Date(data.date).toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }),
+      heure: new Date(data.date).toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
       lignes: [
         { label: 'Table', valeur: data.table },
         { label: 'Serveur', valeur: data.serveur },
