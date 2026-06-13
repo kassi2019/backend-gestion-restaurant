@@ -18,6 +18,7 @@ import { AuthService } from './auth.service';
 import { ActivationService } from '../activation/activation.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { CreerRestaurantDto } from './dto/creer-restaurant.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
@@ -160,6 +161,13 @@ export class AuthController {
     }
 
     return { message: `Modules mis à jour pour le restaurant #${rid}`, nbModules: data.moduleIds.length };
+  }
+
+  // ─── Création d'un restaurant complet (Super Admin uniquement) ───
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Post('creer-restaurant')
+  creerRestaurant(@Body() dto: CreerRestaurantDto) {
+    return this.authService.creerRestaurant(dto);
   }
 
   @Post('login')

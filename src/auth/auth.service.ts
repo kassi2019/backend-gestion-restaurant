@@ -2,12 +2,14 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { CreerRestaurantDto } from './dto/creer-restaurant.dto';
 
 @Injectable()
 export class AuthService {
@@ -275,6 +277,88 @@ export class AuthService {
       data: { mot_de_passe: hashedPassword },
     });
     return { message: 'Mot de passe modifié avec succès' };
+  }
+
+  async creerRestaurant(dto: CreerRestaurantDto) {
+    // Vérifier que le téléphone admin n'est pas déjà utilisé
+    const existingUser = await this.prisma.utilisateur.findUnique({
+      where: { telephone: dto.adminTelephone },
+    });
+    if (existingUser) {
+      throw new ConflictException('Ce numéro de téléphone est déjà utilisé');
+    }
+
+    const dateFin = new Date();
+    dateFin.setDate(dateFin.getDate() + dto.dureeJours);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Créer le restaurant
+      const restaurant = await tx.restaurant.create({
+        data: {
+          nom: dto.nom,
+          adresse: dto.adresse,
+          telephone: dto.telephone,
+          devise: dto.devise || '€',
+          typeAbonnement: dto.typeAbonnement || 'TRIAL',
+          dateFinAbonnement: dateFin,
+          statut: 'OUVERT',
+        },
+      });
+
+      // 2. Créer l'admin du restaurant
+      const hashedPassword = await bcrypt.hash(dto.adminMotDePasse, 10);
+      const admin = await tx.utilisateur.create({
+        data: {
+          nom: dto.adminNom,
+          telephone: dto.adminTelephone,
+          mot_de_passe: hashedPassword,
+          role: 'ADMIN',
+          statut: 'ACTIF',
+          restaurantId: restaurant.id,
+        },
+      });
+
+      // 3. Attribuer les modules au restaurant
+      if (dto.moduleIds.length > 0) {
+        await tx.restaurantModule.createMany({
+          data: dto.moduleIds.map(mid => ({
+            restaurantId: restaurant.id,
+            moduleId: mid,
+          })),
+        });
+      }
+
+      // 4. Attribuer les modules à l'admin
+      if (dto.moduleIds.length > 0) {
+        await tx.userModule.createMany({
+          data: dto.moduleIds.map(mid => ({
+            utilisateurId: admin.id,
+            moduleId: mid,
+          })),
+        });
+      }
+
+      return { restaurant, admin };
+    });
+
+    return {
+      message: 'Restaurant créé avec succès',
+      restaurant: {
+        id: result.restaurant.id,
+        nom: result.restaurant.nom,
+        adresse: result.restaurant.adresse,
+        telephone: result.restaurant.telephone,
+        devise: result.restaurant.devise,
+        typeAbonnement: result.restaurant.typeAbonnement,
+        dateFinAbonnement: result.restaurant.dateFinAbonnement,
+      },
+      admin: {
+        id: result.admin.id,
+        nom: result.admin.nom,
+        telephone: result.admin.telephone,
+        role: result.admin.role,
+      },
+    };
   }
 
   async updateProfile(userId: number, data: { nom?: string; photo?: string }) {

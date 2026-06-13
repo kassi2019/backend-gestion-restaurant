@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 
 const ALGO = 'aes-256-cbc';
@@ -35,7 +36,10 @@ function decrypt(encryptedText: string): string {
 
 @Injectable()
 export class ActivationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifService: NotificationsService,
+  ) {}
 
   async getStatus(restaurantId: number) {
     const restaurant = await this.prisma.restaurant.findUnique({
@@ -471,6 +475,16 @@ export class ActivationService {
       }),
     ]);
 
+    // Notifier les admins du restaurant
+    const admins = await this.prisma.utilisateur.findMany({
+      where: { restaurantId: paiement.restaurantId, role: 'ADMIN', statut: 'ACTIF' },
+      select: { id: true },
+    });
+    const dateFin = nouvelleDateFin.toLocaleDateString('fr-FR');
+    for (const admin of admins) {
+      await this.notifService.create(admin.id, `✅ Votre abonnement a été activé ! Valable jusqu'au ${dateFin} (${paiement.dureeJours} jours).`);
+    }
+
     return {
       message: 'Paiement confirmé, abonnement activé',
       code: codeClair,
@@ -489,6 +503,15 @@ export class ActivationService {
       where: { id: paiementId },
       data: { statut: 'REJETE', verifiedPar: superAdminId, dateVerification: new Date() },
     });
+
+    // Notifier les admins du restaurant
+    const admins = await this.prisma.utilisateur.findMany({
+      where: { restaurantId: paiement.restaurantId, role: 'ADMIN', statut: 'ACTIF' },
+      select: { id: true },
+    });
+    for (const admin of admins) {
+      await this.notifService.create(admin.id, `❌ Votre paiement d'abonnement a été rejeté. Veuillez réessayer ou contacter le support.`);
+    }
 
     return { message: 'Paiement rejeté' };
   }
