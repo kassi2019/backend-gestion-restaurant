@@ -42,7 +42,7 @@ export class MenuController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post()
-  createMenu(@Body() data: { nom: string; prix: number; categorieId: number; image?: string; tempsPreparation?: number }, @Request() req) {
+  createMenu(@Body() data: { nom: string; prix: number; categorieId: number; image?: string; tempsPreparation?: number; accompagnements?: string[] }, @Request() req) {
     return this.menuService.createMenu({ ...data, restaurantId: req.user.restaurantId });
   }
 
@@ -181,6 +181,35 @@ export class MenuController {
   @Patch(':id/stock')
   updateStock(@Param('id') id: string, @Body() data: { stock: number }) {
     return this.menuService.updateStock(+id, data.stock);
+  }
+
+  // ---- Accompagnements gratuits ----
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.RECEPTIONNISTE, Role.CAISSIER)
+  @Get(':menuId/accompagnements')
+  getAccompagnements(@Param('menuId') menuId: string) {
+    return this.menuService.getAccompagnements(+menuId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post(':menuId/accompagnements')
+  addAccompagnement(@Param('menuId') menuId: string, @Body() data: { nom: string }, @Request() req) {
+    return this.menuService.addAccompagnement(+menuId, data.nom, req.user.restaurantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Patch('accompagnements/:id')
+  updateAccompagnement(@Param('id') id: string, @Body() data: { nom: string }) {
+    return this.menuService.updateAccompagnement(+id, data.nom);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Delete('accompagnements/:id')
+  deleteAccompagnement(@Param('id') id: string) {
+    return this.menuService.deleteAccompagnement(+id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

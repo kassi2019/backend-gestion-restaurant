@@ -28,6 +28,7 @@ model Restaurant {
   tables          TableRestaurant[]
   categories      CategorieMenu[]
   menus           Menu[]
+  accompagnements AccompagnementGratuit[]
   clotures        ClotureCaisse[]
   codesActivation CodeActivation[]
   reservations    Reservation[]
@@ -181,6 +182,7 @@ model Menu {
 
   commandeDetails   CommandeDetail[]
   variants          MenuVariant[]
+  accompagnements   AccompagnementGratuit[]
 
   @@map("menus")
 }
@@ -196,6 +198,18 @@ model MenuVariant {
   details   CommandeDetail[]
 
   @@map("menu_variants")
+}
+
+// ---- Accompagnements gratuits liés à un menu ----
+model AccompagnementGratuit {
+  id           Int        @id @default(autoincrement())
+  nom          String     @db.VarChar(255)
+  menuId       Int        @map("menu_id")
+  menu         Menu       @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  restaurantId Int        @map("restaurant_id")
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@map("accompagnements_gratuits")
 }
 
 // ---- Sessions clients (QR Code) ----

@@ -31,7 +31,7 @@ export class MenuService {
   async getMenus(restaurantId: number) {
     return this.prisma.menu.findMany({
       where: { restaurantId },
-      include: { categorie: true, variants: true },
+      include: { categorie: true, variants: true, accompagnements: true },
     });
   }
 
@@ -49,8 +49,26 @@ export class MenuService {
     restaurantId: number;
     image?: string;
     tempsPreparation?: number;
+    accompagnements?: string[];
   }) {
-    return this.prisma.menu.create({ data });
+    const { accompagnements, ...menuData } = data;
+    const menu = await this.prisma.menu.create({ data: menuData });
+
+    // Créer les accompagnements gratuits si fournis
+    if (accompagnements && accompagnements.length > 0) {
+      await this.prisma.accompagnementGratuit.createMany({
+        data: accompagnements.map((nom) => ({
+          nom,
+          menuId: menu.id,
+          restaurantId: data.restaurantId,
+        })),
+      });
+    }
+
+    return this.prisma.menu.findUnique({
+      where: { id: menu.id },
+      include: { categorie: true, variants: true, accompagnements: true },
+    });
   }
 
   async toggleDisponibleDemain(menuId: number) {
@@ -96,7 +114,7 @@ export class MenuService {
         menus: {
           where: { disponibilite: true },
           orderBy: { nom: 'asc' },
-          include: { variants: true },
+          include: { variants: true, accompagnements: true },
         },
       },
     });
@@ -202,5 +220,27 @@ export class MenuService {
     const data: any = { stock: newStock };
     if (newStock === 0) data.disponibilite = false;
     return this.prisma.menu.update({ where: { id: menuId }, data });
+  }
+
+  // ---- Accompagnements gratuits ----
+  async getAccompagnements(menuId: number) {
+    return this.prisma.accompagnementGratuit.findMany({ where: { menuId } });
+  }
+
+  async addAccompagnement(menuId: number, nom: string, restaurantId: number) {
+    return this.prisma.accompagnementGratuit.create({
+      data: { nom, menuId, restaurantId },
+    });
+  }
+
+  async updateAccompagnement(id: number, nom: string) {
+    return this.prisma.accompagnementGratuit.update({
+      where: { id },
+      data: { nom },
+    });
+  }
+
+  async deleteAccompagnement(id: number) {
+    return this.prisma.accompagnementGratuit.delete({ where: { id } });
   }
 }
