@@ -11,6 +11,10 @@ interface FactureData {
   remise?: { type: string; valeur: number; motif?: string } | null;
 }
 
+function formatPrix(montant: number): string {
+  return montant % 1 === 0 ? montant.toFixed(0) : montant.toFixed(2);
+}
+
 export function genererFactureHTML(data: FactureData): string {
   const d = data.restaurant.devise;
   const dateStr = new Date(data.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -77,18 +81,18 @@ export function genererFactureHTML(data: FactureData): string {
     <tr>
       <td class="qty">x${a.quantite}</td>
       <td class="article">${a.variant ? `${a.nom}<br><small style="color:#666">${a.variant}</small>` : a.nom}</td>
-      <td class="price">${a.prix.toFixed(2)} ${d}</td>
-      <td class="price">${a.total.toFixed(2)} ${d}</td>
+      <td class="price">${formatPrix(a.prix)} ${d}</td>
+      <td class="price">${formatPrix(a.total)} ${d}</td>
     </tr>`).join('')}
     ${data.remise ? `
     <tr><td colspan="4"><div class="divider"></div></td></tr>
     <tr>
-      <td colspan="3" style="text-align:right;padding-right:8px;color:#e53e3e;font-weight:bold">Remise ${data.remise.type === 'POURCENTAGE' ? data.remise.valeur + '%' : data.remise.valeur.toFixed(2) + ' ' + d}${data.remise.motif ? ' (' + data.remise.motif + ')' : ''}</td>
+      <td colspan="3" style="text-align:right;padding-right:8px;color:#e53e3e;font-weight:bold">Remise ${data.remise.type === 'POURCENTAGE' ? data.remise.valeur + '%' : formatPrix(data.remise.valeur) + ' ' + d}${data.remise.motif ? ' (' + data.remise.motif + ')' : ''}</td>
       <td class="price" style="color:#e53e3e">-${data.remise.type === 'POURCENTAGE' ? '' : ''}</td>
     </tr>` : ''}
     <tr class="total-row">
       <td colspan="3" style="text-align:right;padding-right:8px">TOTAL</td>
-      <td class="price">${data.total.toFixed(2)} ${d}</td>
+      <td class="price">${formatPrix(data.total)} ${d}</td>
     </tr>
   </table>
 

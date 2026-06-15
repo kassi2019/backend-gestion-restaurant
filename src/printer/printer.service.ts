@@ -43,6 +43,12 @@ export interface PrinterConfig {
 
 export type TicketDestination = 'CUISINE' | 'BAR' | 'SERVEUR' | 'CAISSE';
 
+/** Formate un montant en supprimant les décimales inutiles.
+ *  Ex: 1000.00 → "1000", 1500.50 → "1500.50" */
+export function formatPrix(montant: number): string {
+  return montant % 1 === 0 ? montant.toFixed(0) : montant.toFixed(2);
+}
+
 /** Remplace les caractères accentués par leur équivalent sans accent
  *  pour les imprimantes thermiques qui ne les supportent pas. */
 export function normalizeText(texte: string): string {
@@ -477,17 +483,17 @@ export class PrinterService {
     );
 
     for (const art of data.articles) {
-      const qte = `x${art.quantite}`;
       const nomComplet = art.variant ? `${art.nom} (${art.variant})` : art.nom;
-      // Colonne montant fixe tout à droite (17 chars max: "XXXXXX.00 XOF")
-      const COL = 17;
-      const prix = art.total.toFixed(2) + ' ' + data.devise;
-      const nomMax = width - qte.length - 1 - COL;
-      const nom =
-        nomComplet.length > nomMax
-          ? nomComplet.substring(0, nomMax - 1) + '…'
-          : nomComplet.padEnd(nomMax, ' ');
-      buf.push(qte + ' ' + nom + prix.padStart(COL, ' '));
+      const articleLines = this.wrapArticle(
+        art.quantite,
+        nomComplet,
+        art.total,
+        data.devise,
+        width,
+      );
+      for (const line of articleLines) {
+        buf.push(line);
+      }
     }
 
     buf.push(this.dashedLine(width));
@@ -497,7 +503,7 @@ export class PrinterService {
       const remLabel =
         data.remise.type === 'POURCENTAGE'
           ? `Remise ${data.remise.valeur}%`
-          : `Remise ${data.remise.valeur.toFixed(2)} ${data.devise}`;
+          : `Remise ${formatPrix(data.remise.valeur)} ${data.devise}`;
       const motif = data.remise.motif ? ` (${data.remise.motif})` : '';
       buf.push(this.twoCol(remLabel + motif, '', width));
     }
@@ -506,7 +512,7 @@ export class PrinterService {
     buf.push(CMDS.FEED_LINE);
     buf.push(CMDS.DOUBLE_HEIGHT_ON + CMDS.BOLD_ON);
     buf.push(
-      this.twoCol('TOTAL', `${data.total.toFixed(2)} ${data.devise}`, width),
+      this.twoCol('TOTAL', `${formatPrix(data.total)} ${data.devise}`, width),
     );
     buf.push(CMDS.DOUBLE_HEIGHT_OFF + CMDS.BOLD_OFF);
     buf.push(`${data.modePaiement}`);
@@ -515,12 +521,10 @@ export class PrinterService {
     // ── Pied ──
     buf.push(this.dashedLine(width));
     buf.push(CMDS.ALIGN_CENTER);
-    if (
-      data.piedPage &&
-      data.piedPage.length > 0 &&
-      data.piedPage[0] !== data.titre
-    ) {
-      buf.push(this.padCenter(data.piedPage[0], width));
+    if (data.piedPage && data.piedPage.length > 0) {
+      for (const p of data.piedPage) {
+        buf.push(this.padCenter(p, width));
+      }
     }
     const now = new Date();
     buf.push(
@@ -639,17 +643,17 @@ export class PrinterService {
     lines.push('');
 
     for (const art of data.articles) {
-      const qte = `x${art.quantite}`;
       const nomComplet = art.variant ? `${art.nom} (${art.variant})` : art.nom;
-      // Colonne montant fixe tout à droite (17 chars max: "XXXXXX.00 XOF")
-      const COL = 17;
-      const prix = art.total.toFixed(2) + ' ' + data.devise;
-      const nomMax = width - qte.length - 1 - COL;
-      const nom =
-        nomComplet.length > nomMax
-          ? nomComplet.substring(0, nomMax - 1) + '…'
-          : nomComplet.padEnd(nomMax, ' ');
-      lines.push(qte + ' ' + nom + prix.padStart(COL, ' '));
+      const articleLines = this.wrapArticle(
+        art.quantite,
+        nomComplet,
+        art.total,
+        data.devise,
+        width,
+      );
+      for (const line of articleLines) {
+        lines.push(line);
+      }
     }
 
     lines.push(this.dashedLine(width));
@@ -659,25 +663,23 @@ export class PrinterService {
       const remLabel =
         data.remise.type === 'POURCENTAGE'
           ? `Remise ${data.remise.valeur}%`
-          : `Remise ${data.remise.valeur.toFixed(2)} ${data.devise}`;
+          : `Remise ${formatPrix(data.remise.valeur)} ${data.devise}`;
       lines.push(this.twoCol(remLabel, '', width));
     }
 
     // Total
     lines.push('');
     lines.push(
-      this.twoCol('TOTAL', `${data.total.toFixed(2)} ${data.devise}`, width),
+      this.twoCol('TOTAL', `${formatPrix(data.total)} ${data.devise}`, width),
     );
     lines.push(data.modePaiement);
     lines.push(this.dashedLine(width));
 
     // Pied
-    if (
-      data.piedPage &&
-      data.piedPage.length > 0 &&
-      data.piedPage[0] !== data.titre
-    ) {
-      lines.push(this.padCenter(data.piedPage[0], width));
+    if (data.piedPage && data.piedPage.length > 0) {
+      for (const p of data.piedPage) {
+        lines.push(this.padCenter(p, width));
+      }
     }
     const now = new Date();
     lines.push(
@@ -765,6 +767,65 @@ export class PrinterService {
   private padCenter(text: string, width: number): string {
     const pad = Math.max(0, Math.floor((width - text.length) / 2));
     return ' '.repeat(pad) + text;
+  }
+
+  /** Affiche un article sur une ou plusieurs lignes.
+   *  Layout : x{qté}  {désignation sur plusieurs lignes}  {montant}
+   *  Si le nom tient sur une ligne : tout sur 1 ligne.
+   *  Sinon : désignation wrappée, montant en face de la 1ère ligne. */
+  private wrapArticle(
+    qte: number,
+    nomComplet: string,
+    prix: number,
+    devise: string,
+    width: number,
+    qteCol: number = 3,
+  ): string[] {
+    const qteStr = `x${qte}`.padEnd(qteCol, ' ');
+    const prixStr = formatPrix(prix) + ' ' + devise;
+    const nomIndent = ' '.repeat(qteCol);
+    const nomMax = width - qteCol - prixStr.length;
+
+    // Wrapper le nom par mots
+    const mots = nomComplet.split(' ');
+    const lignesNom: string[] = [];
+    let ligneCourante = '';
+
+    for (const mot of mots) {
+      const candidat = ligneCourante ? ligneCourante + ' ' + mot : mot;
+      if (candidat.length <= nomMax) {
+        ligneCourante = candidat;
+      } else {
+        if (ligneCourante) {
+          lignesNom.push(ligneCourante);
+        }
+        // Si le mot seul est trop long, le couper
+        if (mot.length > nomMax) {
+          let reste = mot;
+          while (reste.length > nomMax) {
+            lignesNom.push(reste.substring(0, nomMax - 1) + '…');
+            reste = reste.substring(nomMax - 1);
+          }
+          ligneCourante = reste;
+        } else {
+          ligneCourante = mot;
+        }
+      }
+    }
+    if (ligneCourante) lignesNom.push(ligneCourante);
+
+    if (lignesNom.length === 0) lignesNom.push('');
+
+    const result: string[] = [];
+    // Première ligne : qté + nom + prix
+    result.push(
+      qteStr + lignesNom[0].padEnd(nomMax, ' ') + prixStr.padStart(prixStr.length, ' '),
+    );
+    // Lignes suivantes : juste le nom (indenté)
+    for (let i = 1; i < lignesNom.length; i++) {
+      result.push(nomIndent + lignesNom[i]);
+    }
+    return result;
   }
 
   private dashedLine(width: number): string {
