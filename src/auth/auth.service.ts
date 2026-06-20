@@ -111,9 +111,14 @@ export class AuthService {
         user.restaurant?.dateFinAbonnement &&
         user.restaurant.dateFinAbonnement < maintenant
       ) {
-        throw new UnauthorizedException(
-          `Abonnement expiré depuis le ${user.restaurant.dateFinAbonnement.toLocaleString('fr-FR')}. Veuillez activer un nouveau code.`,
-        );
+        // L'ADMIN du restaurant peut se connecter même si l'abonnement est expiré
+        // pour pouvoir le renouveler. Les autres rôles sont bloqués.
+        if (user.role !== 'ADMIN') {
+          throw new UnauthorizedException(
+            `Abonnement expiré depuis le ${user.restaurant.dateFinAbonnement.toLocaleString('fr-FR')}. Veuillez contacter votre administrateur.`,
+          );
+        }
+        // Pour l'ADMIN, on laisse passer mais on marque l'abonnement comme expiré
       }
     }
 
@@ -131,8 +136,16 @@ export class AuthService {
     };
     const token = this.jwtService.sign(payload);
 
+    // Vérifier si l'abonnement est expiré (pour le flag dans la réponse)
+    const maintenant = new Date();
+    const abonnementExpire =
+      user.restaurant?.dateFinAbonnement
+        ? user.restaurant.dateFinAbonnement < maintenant
+        : false;
+
     return {
       token,
+      abonnementExpire,
       utilisateur: {
         id: user.id,
         nom: user.nom,

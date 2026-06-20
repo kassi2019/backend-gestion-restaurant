@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
+import { SubscriptionInterceptor } from './interceptors/subscription.interceptor';
 import { ActivationModule } from '../activation/activation.module';
 
 @Module({
@@ -16,7 +18,14 @@ import { ActivationModule } from '../activation/activation.module';
     ActivationModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: SubscriptionInterceptor,
+    },
+  ],
   exports: [AuthService],
 })
 export class AuthModule {}

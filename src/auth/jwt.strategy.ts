@@ -15,7 +15,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: { sub: number; telephone: string; role: string }) {
     const user = await this.prisma.utilisateur.findUnique({
       where: { id: payload.sub },
-      include: { restaurant: { select: { statut: true, dateReouverture: true } } },
+      include: { restaurant: { select: { statut: true, dateReouverture: true, dateFinAbonnement: true } } },
     });
     if (!user || user.statut !== 'ACTIF') {
       throw new UnauthorizedException('Utilisateur inactif ou inexistant');
@@ -40,12 +40,27 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
+    // Vérification de l'abonnement expiré pour les non-ADMIN
+    const maintenant = new Date();
+    const abonnementExpire =
+      user.restaurant?.dateFinAbonnement
+        ? user.restaurant.dateFinAbonnement < maintenant
+        : false;
+
+    // SUPER_ADMIN n'est jamais bloqué
+    if (abonnementExpire && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+      throw new UnauthorizedException(
+        'Abonnement expiré. Veuillez contacter votre administrateur.',
+      );
+    }
+
     return {
       id: user.id,
       nom: user.nom,
       telephone: user.telephone,
       role: user.role,
       restaurantId: user.restaurantId,
+      abonnementExpire,
     };
   }
 }
